@@ -1,0 +1,15 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1045 &1
+EditorBuildSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Scenes:
+  - enabled: 1
+    path: Assets/MixedReality.AzureObjectAnchors/Scenes/AOASampleScene.unity
+    guid: 805128889349a464895fc1426b82bf0a
+  m_configObjects:
+    Unity.XR.WindowsMR.Settings: {fileID: 11400000, guid: e2da3d00edc159043bd0e6b8ee2989f7,
+      type: 2}
+    com.unity.xr.management.loader_settings: {fileID: 11400000, guid: bd8bb8cb8df4083408b6b2fa0b1e04e3,
+      type: 2}
