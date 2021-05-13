@@ -27,6 +27,8 @@ namespace Microsoft.Azure.ObjectAnchors.Unity
             PlayerSettings.WSA.packageName = "AOAMRTKApp";
             PlayerSettings.WSA.applicationDescription = "AOA MRTK sample application.";
 
+            // Workaround for https://issuetracker.unity3d.com/issues/xr-sdk-tracked-pose-driver-stops-working-after-suspending-play-while-run-in-background-is-unchecked
+            PlayerSettings.runInBackground = true;
             BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions()
             {
                 locationPathName = "UWP_mrtk",

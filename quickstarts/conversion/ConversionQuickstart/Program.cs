@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Azure;
 using Azure.Core.Diagnostics;
 using Azure.MixedReality.ObjectAnchors.Conversion;
+using Azure.MixedReality.ObjectAnchors.Conversion.Models;
 using Azure.Storage.Blobs;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -120,6 +121,59 @@ namespace ConversionQuickstart
                     BlobClient downloadBlobClient = new BlobClient(response.Value.OutputModelUri);
                     await downloadBlobClient.DownloadToAsync(outputPath);
                     Console.WriteLine("Success!");
+                }
+                else
+                {
+                    ConversionErrorCode errorCode = response.Value.ErrorCode;
+
+                    if (errorCode == ConversionErrorCode.AssetCannotBeConverted)
+                    {
+                        Console.WriteLine("The asset was unable to be converted. Refer to asset conversion guidelines.");
+                    }
+                    else if (errorCode == ConversionErrorCode.AssetDimensionsOutOfBounds)
+                    {
+                        Console.WriteLine("Asset dimensions exceeded those allowed for an asset to be converted.");
+                    }
+                    else if (errorCode == ConversionErrorCode.AssetSizeTooLarge)
+                    {
+                        Console.WriteLine("The size of the asset file was too large. Refer to asset conversion guidelines for the maximum allowed size.");
+                    }
+                    else if (errorCode == ConversionErrorCode.InvalidAssetUri)
+                    {
+                        Console.WriteLine("The URI provided didn't link to an uploaded asset for conversion.");
+                    }
+                    else if (errorCode == ConversionErrorCode.InvalidFaceVertices)
+                    {
+                        Console.WriteLine("The uploaded asset included references to vertices that don't exist. Ensure the asset file is correctly formed.");
+                    }
+                    else if (errorCode == ConversionErrorCode.InvalidGravity)
+                    {
+                        Console.WriteLine("The provided gravity vector for the asset was incorrect. Ensure it is not the default all-zero vector.");
+                    }
+                    else if (errorCode == ConversionErrorCode.InvalidJobId)
+                    {
+                        Console.WriteLine("The provided job ID doesn't exist.");
+                    }
+                    else if (errorCode == ConversionErrorCode.InvalidScale)
+                    {
+                        Console.WriteLine("The provided scale for the asset was either zero or negative.");
+                    }
+                    else if (errorCode == ConversionErrorCode.TooManyRigPoses)
+                    {
+                        Console.WriteLine("The provided asset had more rig poses than is permitted for an asset to be converted. Refer to asset conversion guidelines for the maximum allowed size.");
+                    }
+                    else if (errorCode == ConversionErrorCode.ZeroFaces)
+                    {
+                        Console.WriteLine("The provided asset had no faced. Ensure the asset file is correctly formed.");
+                    }
+                    else if (errorCode == ConversionErrorCode.ZeroTrajectoriesGenerated)
+                    {
+                        Console.WriteLine("The provided asset was determined to have no trajectories generated. Ensure the asset file is correctly formed.");
+                    }
+                    else
+                    {
+                        Console.WriteLine("An unexpected error was encountered. If the issue persists, reach out to customer support.");
+                    }
                 }
             }
             catch (TaskCanceledException)

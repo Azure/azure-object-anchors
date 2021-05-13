@@ -68,6 +68,9 @@ crashlytics-build.properties
 
 # End of https://www.gitignore.io/api/unity
 
+# Regenerated Settings
+PackageManagerSettings.asset
+
 # OU Files which will automatically regenerate if not there
 [Aa]ssets/Dependencies/
 [Aa]ssets/Dependencies.meta

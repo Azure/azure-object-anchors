@@ -92,6 +92,8 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
 
         /// <summary>
         /// Generates a mesh from an Azure Object Anchors SDK model
+        /// Flips handedness of vertices and modifies triangle list to 
+        /// clockwise winding in order to be usable in Unity.
         /// </summary>
         /// <param name="modelId">The id of the model to get the mesh for</param>
         /// <returns>A mesh with the requested model's geometry</returns>
@@ -100,7 +102,7 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
             IObjectAnchorsService objectAnchorsService = ObjectAnchorsService.GetService();
             var vertices = objectAnchorsService.GetModelVertexPositions(modelId);
             int[] indices = (int[])(object)objectAnchorsService.GetModelTriangleIndices(modelId);
-            Debug.Log($"mesh has {indices.Length}  indices");
+            Debug.Log($"mesh has {indices.Length} indices");
             Mesh mesh = new Mesh();
             Vector3[] unityVertices = new Vector3[vertices.Length];
 
@@ -118,6 +120,12 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
 
             if (indices != null && indices.Length > 2)
             {
+                for (int k = 0; k < indices.Length - 2; k += 3)
+                {
+                    int tmp = indices[k + 2];
+                    indices[k + 2] = indices[k + 1];
+                    indices[k + 1] = tmp;
+                }
                 mesh.SetIndices(indices, MeshTopology.Triangles, 0);
             }
             else
