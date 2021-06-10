@@ -8,6 +8,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/MixedReality.AzureObjectAnchors/Scenes/AOASampleScene.unity
     guid: 9fc0d4010bbf28b4594072e72b8655ab
+  - enabled: 0
+    path: Assets/MixedReality.AzureObjectAnchors/Scenes/VisualizeScene.unity
+    guid: dccd4c1e45548804c881c7ea13a3d4bd
   m_configObjects:
     Unity.XR.WindowsMR.Settings: {fileID: 11400000, guid: 2f306d1db67df0a45a304556cdf506bc,
       type: 2}

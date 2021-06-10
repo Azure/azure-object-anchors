@@ -698,7 +698,7 @@ PlayerSettings:
   metroCertificatePassword: 
   metroCertificateSubject: Microsoft
   metroCertificateIssuer: Microsoft
-  metroCertificateNotAfter: 806e2dd4861dd801
+  metroCertificateNotAfter: 00ea91db6f6dd801
   metroApplicationDescription: Azure Object Anchors Basic Application
   wsaImages: {}
   metroTileShortName: OUBasicApp

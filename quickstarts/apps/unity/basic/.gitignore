@@ -70,3 +70,7 @@ crashlytics-build.properties
 PackageManagerSettings.asset
 
 # End of https://www.gitignore.io/api/unity
+
+# OU Files which will automatically regenerate if not there
+[Aa]ssets/WSATestCertificate.pfx
+[Aa]ssets/WSATestCertificate.pfx.meta
