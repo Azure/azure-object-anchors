@@ -35,11 +35,11 @@ namespace
 
 namespace AoaSampleApp
 {
-    ObjectTracker::ObjectTracker()
+    ObjectTracker::ObjectTracker(AccountInformation const& accountInformation)
         : m_stopWorker(::CreateEvent(nullptr, true, false, nullptr))    // manual reset event
         , m_detectionWorker(&ObjectTracker::DetectionThreadFunc, this)
     {
-        m_initOperation = InitializeAsync();
+        m_initOperation = InitializeAsync(accountInformation);
     }
 
     ObjectTracker::~ObjectTracker()
@@ -69,7 +69,7 @@ namespace AoaSampleApp
         m_observer = nullptr;
     }
 
-    winrt::Windows::Foundation::IAsyncAction ObjectTracker::InitializeAsync()
+    winrt::Windows::Foundation::IAsyncAction ObjectTracker::InitializeAsync(AccountInformation const& accountInformation)
     {
         if (!ObjectObserver::IsSupported())
         {
@@ -82,7 +82,9 @@ namespace AoaSampleApp
             throw hresult_access_denied();
         }
 
-        m_observer = ObjectObserver();
+        m_session = ObjectAnchorsSession(accountInformation);
+
+        m_observer = m_session.CreateObjectObserver();
     }
 
     winrt::Windows::Foundation::IAsyncOperation<guid> ObjectTracker::AddObjectModelAsync(wstring const& filename)
@@ -181,12 +183,12 @@ namespace AoaSampleApp
         co_return diagnosticsFilePath.c_str();
     }
 
-    winrt::Windows::Foundation::IAsyncAction ObjectTracker::UploadDiagnosticsAsync(winrt::hstring const& diagnosticsFilePath, winrt::hstring const& accountId, winrt::hstring const& accountKey, winrt::hstring const& accountDomain)
+    winrt::Windows::Foundation::IAsyncAction ObjectTracker::UploadDiagnosticsAsync(winrt::hstring const& diagnosticsFilePath)
     {
         winrt::check_bool(!diagnosticsFilePath.empty());
         winrt::check_bool(FileExists(WideStringToString(diagnosticsFilePath.c_str())));
 
-        co_await winrt::Microsoft::Azure::ObjectAnchors::Diagnostics::ObjectDiagnosticsSession::UploadDiagnosticsAsync(diagnosticsFilePath, accountId, accountKey, accountDomain);
+        co_await winrt::Microsoft::Azure::ObjectAnchors::Diagnostics::ObjectDiagnosticsSession::UploadDiagnosticsAsync(diagnosticsFilePath, m_session);
     }
 
     vector<TrackedObject> ObjectTracker::GetTrackedObjects(SpatialCoordinateSystem coordinateSystem)

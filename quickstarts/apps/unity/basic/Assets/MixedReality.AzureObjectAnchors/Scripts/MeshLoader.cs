@@ -18,7 +18,8 @@ public class MeshLoader : MonoBehaviour
         MeshFilter meshFilter = gameObject.AddComponent<MeshFilter>();
         Mesh mesh = new Mesh();
 
-        ObjectObserver observer = new ObjectObserver();
+        ObjectAnchorsSession session = new ObjectAnchorsSession(ObjectAnchorsConfig.GetConfig().AccountInformation);
+        ObjectObserver observer = session.CreateObjectObserver();
         byte[] modelBytes = File.ReadAllBytes(ModelPath);
         ObjectModel model = await observer.LoadObjectModelAsync(modelBytes);
 

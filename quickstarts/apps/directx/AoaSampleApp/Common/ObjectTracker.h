@@ -28,7 +28,7 @@ namespace AoaSampleApp
     {
     public:
 
-        ObjectTracker();
+        ObjectTracker(winrt::Microsoft::Azure::ObjectAnchors::AccountInformation const& accountInformation);
         ~ObjectTracker();
 
         winrt::Windows::Foundation::IAsyncOperation<winrt::guid> AddObjectModelAsync(std::wstring const& filename);
@@ -38,7 +38,7 @@ namespace AoaSampleApp
 
         winrt::Windows::Foundation::IAsyncAction StartDiagnosticsAsync();
         winrt::Windows::Foundation::IAsyncOperation<winrt::hstring> StopDiagnosticsAsync();
-        winrt::Windows::Foundation::IAsyncAction UploadDiagnosticsAsync(winrt::hstring const& diagnosticsFilePath, winrt::hstring const& accountId, winrt::hstring const& accountKey, winrt::hstring const& accountDomain);
+        winrt::Windows::Foundation::IAsyncAction UploadDiagnosticsAsync(winrt::hstring const& diagnosticsFilePath);
 
         std::vector<TrackedObject> GetTrackedObjects(winrt::Windows::Perception::Spatial::SpatialCoordinateSystem coordinateSystem);
 
@@ -49,7 +49,7 @@ namespace AoaSampleApp
 
     private:
 
-        winrt::Windows::Foundation::IAsyncAction InitializeAsync();
+        winrt::Windows::Foundation::IAsyncAction InitializeAsync(winrt::Microsoft::Azure::ObjectAnchors::AccountInformation const& accountInformation);
 
         void OnInstanceStateChanged(
             winrt::Windows::Foundation::IInspectable sender,
@@ -59,8 +59,9 @@ namespace AoaSampleApp
 
     private:
 
-        winrt::Windows::Foundation::IAsyncAction m_initOperation{ nullptr };
+        shared_awaitable<winrt::Windows::Foundation::IAsyncAction> m_initOperation{ nullptr };
 
+        winrt::Microsoft::Azure::ObjectAnchors::ObjectAnchorsSession m_session{ nullptr };
         winrt::Microsoft::Azure::ObjectAnchors::ObjectObserver m_observer{ nullptr };
         winrt::Microsoft::Azure::ObjectAnchors::Diagnostics::ObjectDiagnosticsSession m_diagnostics{ nullptr };
 

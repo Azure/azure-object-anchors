@@ -80,4 +80,3 @@ MSBuild/
 MSBuildForUnity.Common.props
 [Aa]ssets/WSATestCertificate.pfx
 [Aa]ssets/WSATestCertificate.pfx.meta
-Packages/packages-lock.json

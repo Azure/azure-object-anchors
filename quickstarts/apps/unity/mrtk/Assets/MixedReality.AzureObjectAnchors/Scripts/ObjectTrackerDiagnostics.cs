@@ -66,7 +66,7 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
         /// </summary>
         /// <param name="subscription">class with account information</param>
         /// <returns>true if any of the sessions uploaded. false if none did.</returns>
-        public async Task<bool> UploadDiagnosticsAsync(ObjectAnchorsSubscription subscription)
+        public async Task<bool> UploadDiagnosticsAsync()
         {
             Debug.Log("Uploading diagnostics");
             bool uploaded = false;
@@ -76,7 +76,7 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
                 string diagnosticsFilePath = _diagnosticsFilePaths.Dequeue();
                 Debug.Log($"uploading {diagnosticsFilePath}");
                 // Uploading may take long when the network is slow or the diagnostics file is large.
-                if (await _objectAnchorsService.UploadDiagnosticsAsync(diagnosticsFilePath, subscription.AccountId, subscription.AccountKey, subscription.AccountDomain))
+                if (await _objectAnchorsService.UploadDiagnosticsAsync(diagnosticsFilePath))
                 {
                     Debug.Log($"'{diagnosticsFilePath}' has been uploaded to Object Anchors blob storage.");
 

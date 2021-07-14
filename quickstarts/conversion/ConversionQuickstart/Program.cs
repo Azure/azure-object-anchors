@@ -176,6 +176,12 @@ namespace ConversionQuickstart
                     }
                 }
             }
+            catch (AssetFileTypeNotSupportedException ex)
+            {
+                returnValue = 1;
+                var supportedFileTypeList = string.Join(", ", ex.SupportedAssetFileTypes);
+                Console.Error.WriteLine($"The provided asset file of type {ex.AttemptedFileType} is not supported. Supported file types include {supportedFileTypeList}.");
+            }
             catch (TaskCanceledException)
             {
                 returnValue = 1;

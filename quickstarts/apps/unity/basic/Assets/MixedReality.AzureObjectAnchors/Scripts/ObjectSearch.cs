@@ -302,13 +302,14 @@ public class ObjectSearch : MonoBehaviour
                 Orientation = _cachedCameraMain.transform.rotation,
             };
 
-            var coordinateSystem = ObjectAnchorsWorldManager.GlobalCoordinateSystem;
+#if WINDOWS_UWP
+            var coordinateSystem = ObjectAnchorsWorldManager.WorldOrigin;
 
             Task.Run(async () =>
             {
                 try
                 {
-                    await DetectObjectAsync(coordinateSystem, cameraLocation);
+                    await DetectObjectAsync(coordinateSystem.TryToSpatialGraph(), cameraLocation);
                 }
                 catch (Exception ex)
                 {
@@ -321,6 +322,7 @@ public class ObjectSearch : MonoBehaviour
 
                 Interlocked.CompareExchange(ref _detectionCompleted, 1, 0);
             });
+#endif
         }
     }
 
@@ -417,7 +419,7 @@ public class ObjectSearch : MonoBehaviour
                 query.SearchAreas.Add(
                     Microsoft.Azure.ObjectAnchors.ObjectSearchArea.FromOrientedBox(
                         coordinateSystem.Value,
-                        boundingBox.ToOuSdk()));
+                        boundingBox.ToSpatialGraph()));
             }
 
             if (SearchAreaAsFieldOfView)
@@ -434,7 +436,7 @@ public class ObjectSearch : MonoBehaviour
                 query.SearchAreas.Add(
                     Microsoft.Azure.ObjectAnchors.ObjectSearchArea.FromFieldOfView(
                         coordinateSystem.Value,
-                        fieldOfView.ToOuSdk()));
+                        fieldOfView.ToSpatialGraph()));
             }
 
             if (SearchAreaAsSphere)
@@ -451,7 +453,7 @@ public class ObjectSearch : MonoBehaviour
                 query.SearchAreas.Add(
                     Microsoft.Azure.ObjectAnchors.ObjectSearchArea.FromSphere(
                         coordinateSystem.Value,
-                        sphere.ToOuSdk()));
+                        sphere.ToSpatialGraph()));
             }
 
             objectQueries.Add(query);

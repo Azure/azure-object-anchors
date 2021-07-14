@@ -47,4 +47,45 @@
 
 #include "Common/FileUtilities.h"
 #include "Common/SafeCast.h"
-#include "Common/WinrtGuidHash.h"
+
+template <typename TAsync>
+struct shared_awaitable
+{
+    TAsync m_async{ nullptr };
+    std::mutex m_lock;
+
+    shared_awaitable& operator=(TAsync&& async)
+    {
+        std::unique_lock lock(m_lock);
+        m_async = std::move(async);
+        return *this;
+    }
+
+    operator bool() { std::unique_lock lock(m_lock); return bool(m_async); }
+
+    struct awaiter
+    {
+        TAsync m_async;
+
+        bool await_ready() const
+        {
+            return m_async.Status() != winrt::Windows::Foundation::AsyncStatus::Started;
+        }
+
+        void await_suspend(std::experimental::coroutine_handle<> onReady)
+        {
+            std::thread([&async = m_async, context = winrt::apartment_context{}, onReady]() mutable
+            {
+                async.get();
+                context.await_suspend(onReady);
+            }).detach();
+        }
+
+        decltype(auto) await_resume()
+        {
+            return m_async.GetResults();
+        }
+    };
+
+    auto operator co_await() { std::unique_lock lock(m_lock); return awaiter{ m_async }; }
+};

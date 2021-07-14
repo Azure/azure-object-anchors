@@ -149,7 +149,7 @@ namespace AoaSampleApp
         std::unique_ptr<ObjectTracker>                              m_objectTrackerPtr;
         winrt::Microsoft::Azure::ObjectAnchors::ObjectSearchArea    m_lastSearchArea{ nullptr };
 
-        winrt::Windows::Foundation::IAsyncAction                    m_initializeOperation{ nullptr };
-        winrt::Windows::Foundation::IAsyncAction                    m_searchAreaOperation{ nullptr };
+        shared_awaitable<winrt::Windows::Foundation::IAsyncAction>  m_initializeOperation{ nullptr };
+        shared_awaitable<winrt::Windows::Foundation::IAsyncAction>  m_searchAreaOperation{ nullptr };
     };
 }

@@ -174,16 +174,8 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
         private async void UploadTracing()
         {
             _textToSpeech.Speak("Start uploading diagnostics.");
-            ObjectAnchorsSubscription subscription = await ObjectAnchorsSubscription.LoadObjectAnchorsSubscriptionIfExists();
-            if (subscription != null)
-            {
-                bool uploaded = await ObjectTrackerDiagnostics.Instance.UploadDiagnosticsAsync(subscription);
-                _textToSpeech.Speak("Diagnostics uploading " + (uploaded ? " succeeded." : " failed."));
-            }
-            else
-            {
-                _textToSpeech.Speak("Subscription not found");
-            }
+            bool uploaded = await ObjectTrackerDiagnostics.Instance.UploadDiagnosticsAsync();
+            _textToSpeech.Speak("Diagnostics uploading " + (uploaded ? " succeeded." : " failed."));
         }
 
         public void CoverageRatioSliderChanged(SliderEventData sliderEventData)

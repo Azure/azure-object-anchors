@@ -432,10 +432,16 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
         /// Queues queries for all known models around the requested bounds
         /// </summary>
         /// <param name="queryBounds"></param>
-        public void QueueQueriesInBounds(ObjectAnchorsBoundingBox queryBounds)
+        public async void QueueQueriesInBounds(ObjectAnchorsBoundingBox queryBounds)
         {
             List<ObjectQuery> nextQuerySet = new List<ObjectQuery>();
-            SpatialGraph.SpatialGraphCoordinateSystem? coordinateSystem = ObjectAnchorsWorldManager.GlobalCoordinateSystem;
+            SpatialGraph.SpatialGraphCoordinateSystem? coordinateSystem = null;
+
+#if WINDOWS_UWP
+            var worldOrigin = ObjectAnchorsWorldManager.WorldOrigin;
+            coordinateSystem = await System.Threading.Tasks.Task.Run(() => worldOrigin?.TryToSpatialGraph());
+#endif
+
             if (!coordinateSystem.HasValue)
             {
                 Debug.LogError("no coordinate system?");
@@ -463,7 +469,7 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
 
                 nextQuery.SearchAreas.Add(ObjectSearchArea.FromOrientedBox(
                        coordinateSystem.Value,
-                       queryBounds.ToOuSdk())
+                       queryBounds.ToSpatialGraph())
                    );
 
                 nextQuerySet.Add(nextQuery);

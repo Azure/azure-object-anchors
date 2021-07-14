@@ -28,7 +28,7 @@ namespace
 {
     // Name of the file in application local cache that turns on diagnostics.
     constexpr WCHAR* c_DebugFilename = L"debug";
-    constexpr WCHAR* c_SubscriptionFilename = L"subscription.json";
+    constexpr WCHAR* c_ConfigurationFilename = L"ms-appx:///ObjectAnchorsConfig.json";
 
     static inline DirectX::BoundingOrientedBox GetObjectModelBoundingBox(winrt::Microsoft::Azure::ObjectAnchors::ObjectModel const& model)
     {
@@ -108,7 +108,6 @@ DirectX::XMFLOAT3 AoaSampleAppMain::ObjectRenderer::GetPosition() const
 // Loads and initializes application assets when the application is loaded.
 AoaSampleAppMain::AoaSampleAppMain(std::shared_ptr<DeviceResources> const& deviceResources)
     : m_deviceResources(deviceResources)
-    , m_objectTrackerPtr(std::make_unique<ObjectTracker>())
 {
     // Register to be notified if the device is lost or recreated.
     m_deviceResources->RegisterDeviceNotify(this);
@@ -212,6 +211,20 @@ void AoaSampleAppMain::UnregisterHolographicEventHandlers()
 winrt::Windows::Foundation::IAsyncAction AoaSampleAppMain::LoadObjectModelAsync()
 {
     auto localFolder{ ApplicationData::Current().LocalFolder() };
+
+    // Parse account id, key and domain
+    auto configuration = co_await PathIO::ReadTextAsync(c_ConfigurationFilename);
+
+    auto json = winrt::Windows::Data::Json::JsonObject::Parse(configuration);
+
+    // Throw exception if the name doesn't exist in the json object.
+    AccountInformation accountInformation = {
+        winrt::guid(json.GetNamedString(L"AccountId")),
+        json.GetNamedString(L"AccountKey"),
+        json.GetNamedString(L"AccountDomain")
+    };
+
+    m_objectTrackerPtr = std::make_unique<ObjectTracker>(accountInformation);
 
     for (auto const& file : co_await localFolder.GetFilesAsync())
     {
@@ -322,28 +335,7 @@ winrt::Windows::Foundation::IAsyncAction AoaSampleAppMain::StopAndUploadDiagnost
         co_return;
     }
 
-    // Check if subscription account is provided, if yes, upload the diagnostics to the service storage.
-    auto localFolder{ ApplicationData::Current().LocalFolder() };
-
-    auto file = co_await localFolder.TryGetItemAsync(c_SubscriptionFilename);
-
-    if (file != nullptr)
-    {
-        // Parse account id, key and domain
-        auto subscription = co_await PathIO::ReadTextAsync(file.Path());
-
-        auto json = winrt::Windows::Data::Json::JsonObject();
-        if (winrt::Windows::Data::Json::JsonObject::TryParse(subscription, json))
-        {
-            // Throw exception if the name doesn't exist in the json object.
-            auto accountId = json.GetNamedString(L"AccountId");
-            auto accountKey = json.GetNamedString(L"AccountKey");
-            auto accountDomain = json.GetNamedString(L"AccountDomain");
-
-            // UploadDiagnosticsAsync method needs to run in the UI thread thus cannot be waited for completion.
-            m_objectTrackerPtr->UploadDiagnosticsAsync(diagnosticsFilePath, accountId, accountKey, accountDomain);
-        }
-    }
+    co_await m_objectTrackerPtr->UploadDiagnosticsAsync(diagnosticsFilePath);
 }
 
 winrt::Windows::Foundation::IAsyncAction AoaSampleAppMain::UpdateObjectSearchArea(winrt::Windows::Perception::People::HeadPose const& headPose)
