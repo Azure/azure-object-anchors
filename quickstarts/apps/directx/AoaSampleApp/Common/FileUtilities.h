@@ -68,42 +68,6 @@ namespace AoaSampleApp
         return GetFilenamePath(WideStringToString(wideExecutableFilename));
     }
 
-    inline FILE* OpenFile(const std::string& filename, const char* mode)
-    {
-        std::wstring wideFilename = StringToWideString(filename);
-        std::wstring wideMode = StringToWideString(std::string(mode));
-
-        FILE* pFile = nullptr;
-
-        // First try the filename as-is
-        _wfopen_s(&pFile, wideFilename.c_str(), wideMode.c_str());
-        if (pFile)
-            return pFile;
-
-        // Then try the filename relative to the executable location
-        std::wstring exePath = StringToWideString(GetExecutablePath());
-        _wfopen_s(&pFile, (exePath + L"/" + wideFilename).c_str(), wideMode.c_str());
-        if (pFile)
-            return pFile;
-
-        return nullptr;
-    }
-
-    inline bool FileExists(const std::string& filename)
-    {
-        FILE* pFile = OpenFile(filename, "rb");
-
-        if (pFile)
-        {
-            fclose(pFile);
-            return true;
-        }
-        else
-        {
-            return false;
-        }
-    }
-
     static inline std::string FormatDateTime(time_t const& t)
     {
         struct tm tm;
@@ -115,7 +79,7 @@ namespace AoaSampleApp
         return oss.str();
     }
 
-    static inline std::wstring PathJoin(std::wstring const& folder, std::wstring const& filename)
+    static inline std::wstring PathJoin(std::wstring_view const& folder, std::wstring_view const& filename)
     {
         WCHAR fullPath[512] = { 0 };
 
@@ -123,8 +87,8 @@ namespace AoaSampleApp
             PathCchCombineEx(
                 fullPath,
                 _countof(fullPath),
-                folder.c_str(),
-                filename.c_str(),
+                folder.data(),
+                filename.data(),
                 PATHCCH_ALLOW_LONG_PATHS));
 
         return fullPath;

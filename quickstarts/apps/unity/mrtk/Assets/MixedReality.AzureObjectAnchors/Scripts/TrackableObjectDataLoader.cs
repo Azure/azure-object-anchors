@@ -7,12 +7,17 @@ using System.IO;
 using System.Threading.Tasks;
 using UnityEngine;
 
+#if WINDOWS_UWP
+using Windows.Storage;
+using Windows.Storage.Streams;
+#endif // WINDOWS_UWP
+
 namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
 {
     /// <summary>
     /// Loads models from the applications 'LocalState' folder
     /// </summary>
-    public class TrackableObjectDataLoader
+    public class TrackableObjectDataLoader : IDisposable
     {
         private static TrackableObjectDataLoader _instance;
         public static TrackableObjectDataLoader Instance
@@ -51,7 +56,7 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
             return result;
         }
 
-        public async Task<bool> LoadObjectModelsAsync(string modelPath)
+        public async Task<bool> LoadObjectModelsAsync(string modelPath, ObjectObservationMode observationMode)
         {
             IObjectAnchorsService objectAnchorsService = ObjectAnchorsService.GetService();
             Debug.Log($"{Application.persistentDataPath} {objectAnchorsService != null}");
@@ -62,13 +67,24 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
                 var trackableObject = new TrackableObjectData();
 
                 trackableObject.ModelFilePath = file.Replace('/', '\\');
+                string appPath = Application.persistentDataPath.Replace('/', '\\');
+                if (trackableObject.ModelFilePath.Contains(appPath))
+                {
+                     trackableObject.ModelId = await objectAnchorsService.AddObjectModelAsync(trackableObject.ModelFilePath);
+                }
+                else
+                {
+#if WINDOWS_UWP                    
+                    byte[] buffer = await ReadFileBytesAsync(trackableObject.ModelFilePath);
+                    trackableObject.ModelId = await objectAnchorsService.AddObjectModelAsync(buffer);
+#endif // WINDOWS_UWP
+                }
 
-                trackableObject.ModelId = await objectAnchorsService.AddObjectModelAsync(trackableObject.ModelFilePath);
                 if (trackableObject.ModelId != Guid.Empty)
                 {
                     // Query the default coverage threshold from this object model.
-                    ObjectQuery query = objectAnchorsService.CreateObjectQuery(trackableObject.ModelId);
-                    trackableObject.MinSurfaceCoverageFromObjectModel = query.MinSurfaceCoverage;
+                    trackableObject.Query = objectAnchorsService.CreateObjectQuery(trackableObject.ModelId, observationMode);
+                    trackableObject.MinSurfaceCoverageFromObjectModel = trackableObject.Query.MinSurfaceCoverage;
 
                     trackableObject.ModelMesh = GenerateMesh(trackableObject.ModelId);
                     trackableObject.logicalBoundingBox = objectAnchorsService.GetModelBoundingBox(trackableObject.ModelId);
@@ -143,6 +159,38 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
             mesh.RecalculateBounds();
             mesh.RecalculateNormals();
             return mesh;
+        }
+
+#if WINDOWS_UWP
+        private async Task<byte[]> ReadFileBytesAsync(string filePath)
+        {
+            StorageFile file = await StorageFile.GetFileFromPathAsync(filePath);
+            if(file == null)
+            {
+                return null; 
+            }           
+
+            using (IRandomAccessStream stream = await file.OpenReadAsync())
+            {
+                using (var reader = new DataReader(stream.GetInputStreamAt(0)))
+                {
+                    await reader.LoadAsync((uint)stream.Size);
+                    var bytes = new byte[stream.Size];
+                    reader.ReadBytes(bytes);
+                    return bytes;
+                }
+            }
+        }
+#endif // WINDOWS_UWP
+
+        public void Dispose()
+        {
+            foreach (var tod in _trackableObjects)
+            {
+                tod.Query.Dispose();
+            }
+            _trackableObjects.Clear();
+            _instance = null;
         }
     }
 }

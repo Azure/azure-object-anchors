@@ -4,7 +4,7 @@
 #include "ObjectTracker.h"
 #include <PathCch.h>
 #include <ppl.h>
-#include <robuffer.h>
+#include <winrt/Windows.Storage.AccessCache.h>
 
 using namespace std;
 using namespace DirectX;
@@ -14,24 +14,6 @@ using namespace winrt::Windows::Perception::Spatial;
 using namespace winrt::Windows::Storage;
 using namespace winrt::Microsoft::Azure::ObjectAnchors;
 using namespace winrt::Microsoft::Azure::ObjectAnchors::SpatialGraph;
-
-namespace
-{
-    winrt::Windows::Foundation::IReference<float4x4> TryComputeTransformTo(SpatialGraphLocation const& from, SpatialGraphLocation const& to)
-    {
-        winrt::Windows::Foundation::IReference<float4x4> relativePose{ nullptr };
-
-        auto coordSystemOfFrom = Preview::SpatialGraphInteropPreview::CreateCoordinateSystemForNode(from.NodeId, from.Position, from.Orientation);
-        auto coordSystemOfTo = Preview::SpatialGraphInteropPreview::CreateCoordinateSystemForNode(to.NodeId, to.Position, to.Orientation);
-
-        if (coordSystemOfFrom != nullptr && coordSystemOfTo)
-        {
-            relativePose = coordSystemOfFrom.TryGetTransformTo(coordSystemOfTo);
-        }
-
-        return relativePose;
-    }
-}
 
 namespace AoaSampleApp
 {
@@ -51,17 +33,15 @@ namespace AoaSampleApp
 
         m_diagnostics = nullptr;
 
-        for (auto& entry : m_instances)
+        for (auto& [instance, metadata] : m_instances)
         {
-            auto instance = entry.first.try_as<ObjectInstance>();
-            instance.Changed(entry.second.ChangedEventToken);
             instance.Close();
         }
         m_instances.clear();
 
-        for (auto& model : m_models)
+        for (auto& [modelId, model] : m_models)
         {
-            model.second.Close();
+            model.Close();
         }
         m_models.clear();
 
@@ -87,20 +67,13 @@ namespace AoaSampleApp
         m_observer = m_session.CreateObjectObserver();
     }
 
-    winrt::Windows::Foundation::IAsyncOperation<guid> ObjectTracker::AddObjectModelAsync(wstring const& filename)
+    winrt::Windows::Foundation::IAsyncOperation<guid> ObjectTracker::AddObjectModelAsync(winrt::Windows::Storage::StorageFile file)
     {
         co_await m_initOperation;
 
-        wchar_t fullFilePath[1024];
-        GetFullPathNameW(filename.data(), _countof(fullFilePath), fullFilePath, nullptr);
-
-        auto buffer{ co_await winrt::Windows::Storage::PathIO::ReadBufferAsync(fullFilePath) };
-        const unsigned int bufferSize = static_cast<unsigned int>(buffer.Length());
-
-        uint8_t* bufferData{};
-        buffer.as<::Windows::Storage::Streams::IBufferByteAccess>()->Buffer(&bufferData);
+        auto buffer = co_await winrt::Windows::Storage::FileIO::ReadBufferAsync(file);
         auto model = co_await m_observer.LoadObjectModelAsync(
-            winrt::array_view(bufferData, bufferData + bufferSize));
+            winrt::array_view(buffer.data(), buffer.Length()));
 
         auto id = model.Id();
         m_models.emplace(id, model);
@@ -143,11 +116,8 @@ namespace AoaSampleApp
         // Close instances being tracked to enforce using latest detection results.
         //
 
-        for (auto& entry : m_instances)
+        for (auto& [instance, metadata] : m_instances)
         {
-            auto instance = entry.first.try_as<ObjectInstance>();
-
-            instance.Changed(entry.second.ChangedEventToken);
             instance.Close();
         }
 
@@ -158,35 +128,57 @@ namespace AoaSampleApp
     {
         if (m_diagnostics == nullptr)
         {
+            co_await winrt::resume_background();
             m_diagnostics = winrt::Microsoft::Azure::ObjectAnchors::Diagnostics::ObjectDiagnosticsSession(m_observer, (std::numeric_limits<uint32_t>::max)());
         }
-
-        co_return;
     }
 
     winrt::Windows::Foundation::IAsyncOperation<winrt::hstring> ObjectTracker::StopDiagnosticsAsync()
     {
-        wstring diagnosticsFilePath;
+        hstring diagnosticsFilePath;
 
         if (m_diagnostics != nullptr)
         {
             // Create a diagnostics folder named by current time.
             auto diagnosticsFilename = StringToWideString(FormatDateTime(std::time(nullptr))) + L".zip";
 
-            diagnosticsFilePath = PathJoin(ApplicationData::Current().TemporaryFolder().Path().c_str(), diagnosticsFilename);
+            static StorageFolder diagnosticsFolder{ nullptr };
+            if (!diagnosticsFolder)
+            {
+                constexpr auto token = L"diagnosticsFolder";
+                auto futureAccessList = AccessCache::StorageApplicationPermissions::FutureAccessList();
+                if (futureAccessList.ContainsItem(token))
+                {
+                    try
+                    {
+                        diagnosticsFolder = co_await futureAccessList.GetFolderAsync(token);
+                    }
+                    catch (...)
+                    {
+                        // Folder may have been deleted by the user; recreate it below.
+                    }
+                }
 
-            co_await m_diagnostics.CloseAsync(diagnosticsFilePath.c_str());
+                if (!diagnosticsFolder)
+                {
+                    diagnosticsFolder = co_await DownloadsFolder::CreateFolderAsync(L"Diagnostics");
+                    futureAccessList.AddOrReplace(token, diagnosticsFolder);
+                }
+            }
+
+            diagnosticsFilePath = PathJoin(diagnosticsFolder.Path(), diagnosticsFilename);
+
+            co_await m_diagnostics.CloseAsync(diagnosticsFilePath);
 
             m_diagnostics = nullptr;
         }
 
-        co_return diagnosticsFilePath.c_str();
+        co_return diagnosticsFilePath;
     }
 
     winrt::Windows::Foundation::IAsyncAction ObjectTracker::UploadDiagnosticsAsync(winrt::hstring const& diagnosticsFilePath)
     {
         winrt::check_bool(!diagnosticsFilePath.empty());
-        winrt::check_bool(FileExists(WideStringToString(diagnosticsFilePath.c_str())));
 
         co_await winrt::Microsoft::Azure::ObjectAnchors::Diagnostics::ObjectDiagnosticsSession::UploadDiagnosticsAsync(diagnosticsFilePath, m_session);
     }
@@ -198,31 +190,15 @@ namespace AoaSampleApp
         vector<TrackedObject> objects;
         objects.reserve(m_instances.size());
 
-        for(auto const& entry : m_instances)
+        for(auto& [instance, metadata] : m_instances)
         {
-            auto const& state = entry.second.State;
-
-            auto frameOfStaticNode = Preview::SpatialGraphInteropPreview::CreateCoordinateSystemForNode(state.Center.NodeId);
-            if (frameOfStaticNode != nullptr)
+            auto centerToCoordinateSystem = metadata.CenterCoordinateSystem.TryGetTransformTo(coordinateSystem);
+            if (centerToCoordinateSystem)
             {
-                auto referenceFromStaticNode = frameOfStaticNode.TryGetTransformTo(coordinateSystem);
-                if (referenceFromStaticNode != nullptr)
-                {
-                    // reference_from_object = reference_from_node * node_from_object
-                    XMMATRIX referenceFromObject =
-                        XMMatrixScalingFromVector(XMLoadFloat3(&reinterpret_cast<XMFLOAT3 const&>(state.ScaleChange))) *
-                        XMMatrixRotationQuaternion(XMLoadFloat4(&reinterpret_cast<XMFLOAT4 const&>(state.Center.Orientation))) *
-                        XMMatrixTranslationFromVector(XMLoadFloat3(&reinterpret_cast<XMFLOAT3 const&>(state.Center.Position))) *
-                        XMLoadFloat4x4(&referenceFromStaticNode.Value());
-
-                    auto instance = entry.first.try_as<ObjectInstance>();
-
-                    TrackedObject obj;
-                    obj.ModelId = instance.ModelId();
-                    XMStoreFloat4x4(&obj.RelativePoseToFrameOfReference, referenceFromObject);
-
-                    objects.emplace_back(obj);
-                }
+                TrackedObject obj(metadata.State);
+                obj.ModelId = instance.ModelId();
+                obj.CenterToCoordinateSystemTransform = centerToCoordinateSystem.Value();
+                objects.emplace_back(obj);
             }
         }
 
@@ -240,10 +216,9 @@ namespace AoaSampleApp
 
         m_trackingMode = mode;
 
-        for (auto& entry : m_instances)
+        for (auto& [instance, metadata] : m_instances)
         {
-            auto inst = entry.first.try_as<ObjectInstance>();
-            inst.Mode(m_trackingMode);
+            instance.Mode(m_trackingMode);
         }
     }
 
@@ -259,16 +234,15 @@ namespace AoaSampleApp
     {
         lock_guard lock(m_mutex);
 
-        auto it = m_instances.find(sender);
+        auto instance = sender.as<ObjectInstance>();
+        auto it = m_instances.find(instance);
         winrt::check_bool(it != m_instances.cend());
 
         // Query tracking state, close an instance if it's lost in tracking.
-        auto instance = sender.try_as<ObjectInstance>();
         auto state = instance.TryGetCurrentState();
 
         if (state == nullptr)
         {
-            instance.Changed(it->second.ChangedEventToken);
             instance.Close();
 
             m_instances.erase(it);
@@ -304,13 +278,12 @@ namespace AoaSampleApp
 
                 if (m_searchArea != nullptr)
                 {
-                    for (auto const& modelKV : m_models)
+                    for (auto const& [modelId, model] : m_models)
                     {
                         bool found = false;
-                        for (auto const& instKV : m_instances)
+                        for (auto const& [instance, metadata] : m_instances)
                         {
-                            auto inst = instKV.first.try_as<ObjectInstance>();
-                            if (modelKV.first == inst.ModelId())
+                            if (modelId == instance.ModelId())
                             {
                                 found = true;
                                 break;
@@ -319,7 +292,7 @@ namespace AoaSampleApp
 
                         if (!found)
                         {
-                            auto query = ObjectQuery(modelKV.second);
+                            auto query = ObjectQuery(model);
                             query.MaxScaleChange(m_maxScaleChange);
                             query.SearchAreas().Append(m_searchArea);
 
@@ -348,9 +321,8 @@ namespace AoaSampleApp
                 // Add instances to the list.
                 //
 
-                lock_guard lock(m_mutex);
-
-                for (auto& inst : detectedObjects)
+                decltype(m_instances) newInstances;
+                for (const auto& inst : detectedObjects)
                 {
                     auto state = inst.TryGetCurrentState();
 
@@ -362,13 +334,22 @@ namespace AoaSampleApp
                             ObjectInstanceChangedHandler(
                                 bind(&ObjectTracker::OnInstanceStateChanged, this, placeholders::_1, placeholders::_2)));
 
-                        m_instances[inst] = { token, state.Value() };
+                        const auto& center = state.Value().Center;
+                        newInstances.emplace(inst, ObjectInstanceMetadata{
+                            inst.Changed(winrt::auto_revoke, bind(&ObjectTracker::OnInstanceStateChanged, this, placeholders::_1, placeholders::_2)),
+                            state.Value(),
+                            Preview::SpatialGraphInteropPreview::CreateCoordinateSystemForNode(center.NodeId, center.Position, center.Orientation)
+                        });
                     }
                     else
                     {
                         inst.Close();
                     }
                 }
+
+                lock_guard lock(m_mutex);
+                newInstances.merge(std::move(m_instances)); // splice in old instances; new instances are preserved
+                m_instances = std::move(newInstances);
             }
         }
     }

@@ -125,7 +125,9 @@ PlayerSettings:
     16:9: 1
     Others: 1
   bundleVersion: 0.1
-  preloadedAssets: []
+  preloadedAssets:
+  - {fileID: 7587636239810756084, guid: 2f306d1db67df0a45a304556cdf506bc, type: 2}
+  - {fileID: -5903284617513265253, guid: e4417e41a38147c47b90650e66063c9d, type: 2}
   metroInputSource: 0
   wsaTransparentSwapchain: 0
   m_HolographicPauseOnTrackingLoss: 1
@@ -730,7 +732,7 @@ PlayerSettings:
   metroCertificatePassword: 
   metroCertificateSubject: Microsoft
   metroCertificateIssuer: Microsoft
-  metroCertificateNotAfter: 00238d624488d801
+  metroCertificateNotAfter: 0022b8ba5392d801
   metroApplicationDescription: Azure Object Anchors Basic Application
   wsaImages: {}
   metroTileShortName: OUBasicApp
@@ -766,7 +768,7 @@ PlayerSettings:
       LowLevelDevices: False
       Microphone: False
       MusicLibrary: False
-      Objects3D: False
+      Objects3D: True
       OfflineMapsManagement: False
       PhoneCall: False
       PhoneCallHistoryPublic: False

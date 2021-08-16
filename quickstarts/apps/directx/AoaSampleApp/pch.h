@@ -51,7 +51,15 @@
 template <typename TAsync>
 struct shared_awaitable
 {
-    TAsync m_async{ nullptr };
+    struct shared_async : TAsync
+    {
+        using TAsync::TAsync;
+        using TAsync::operator=;
+
+        std::shared_ptr<std::mutex> m_completionLock = std::make_shared<std::mutex>();
+    };
+
+    shared_async m_async{ nullptr };
     std::mutex m_lock;
 
     shared_awaitable& operator=(TAsync&& async)
@@ -65,7 +73,8 @@ struct shared_awaitable
 
     struct awaiter
     {
-        TAsync m_async;
+        shared_async m_async;
+        std::shared_ptr<std::mutex> m_completionLock;
 
         bool await_ready() const
         {
@@ -76,7 +85,10 @@ struct shared_awaitable
         {
             std::thread([&async = m_async, context = winrt::apartment_context{}, onReady]() mutable
             {
-                async.get();
+                {
+                    std::unique_lock lock(*async.m_completionLock);
+                    async.get();
+                }
                 context.await_suspend(onReady);
             }).detach();
         }

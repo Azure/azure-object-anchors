@@ -292,9 +292,8 @@ MonoBehaviour:
   SearchFrustumHorizontalFovInDegrees: 75
   SearchFrustumAspectRatio: 1
   SearchAreaScaleFactor: 2
-  SearchAreaAsBoundingBox: 0
-  SearchAreaAsFieldOfView: 1
-  SearchAreaAsSphere: 0
+  SearchAreaShape: 0
+  ObservationMode: 0
   SearchSingleInstance: 1
   DiagnosticsSentinelFilename: debug
   WireframeMaterial: {fileID: 2100000, guid: 7f82994d006a3ca479d97a7e3e2a91d3, type: 2}

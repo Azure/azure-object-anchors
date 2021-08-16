@@ -18,10 +18,12 @@
 
 namespace AoaSampleApp
 {
-    struct TrackedObject
+    struct TrackedObject : winrt::Microsoft::Azure::ObjectAnchors::ObjectInstanceState
     {
+        TrackedObject(ObjectInstanceState const& state) : ObjectInstanceState(state) {}
+
         winrt::guid ModelId;
-        DirectX::XMFLOAT4X4 RelativePoseToFrameOfReference;
+        winrt::Windows::Foundation::Numerics::float4x4 CenterToCoordinateSystemTransform;
     };
 
     class ObjectTracker
@@ -31,7 +33,7 @@ namespace AoaSampleApp
         ObjectTracker(winrt::Microsoft::Azure::ObjectAnchors::AccountInformation const& accountInformation);
         ~ObjectTracker();
 
-        winrt::Windows::Foundation::IAsyncOperation<winrt::guid> AddObjectModelAsync(std::wstring const& filename);
+        winrt::Windows::Foundation::IAsyncOperation<winrt::guid> AddObjectModelAsync(winrt::Windows::Storage::StorageFile file);
         winrt::Microsoft::Azure::ObjectAnchors::ObjectModel GetObjectModel(winrt::guid const& id) const;
 
         winrt::Windows::Foundation::IAsyncAction DetectAsync(winrt::Microsoft::Azure::ObjectAnchors::ObjectSearchArea searchArea);
@@ -69,11 +71,12 @@ namespace AoaSampleApp
 
         struct ObjectInstanceMetadata
         {
-            winrt::event_token ChangedEventToken;
+            winrt::Microsoft::Azure::ObjectAnchors::ObjectInstance::Changed_revoker ChangedSubscription;
             winrt::Microsoft::Azure::ObjectAnchors::ObjectInstanceState State;
+            winrt::Windows::Perception::Spatial::SpatialCoordinateSystem CenterCoordinateSystem;
         };
 
-        std::unordered_map<winrt::Windows::Foundation::IInspectable, ObjectInstanceMetadata> m_instances;
+        std::unordered_map<winrt::Microsoft::Azure::ObjectAnchors::ObjectInstance, ObjectInstanceMetadata> m_instances;
 
         // Object detection related fields.
         mutable std::mutex m_mutex;

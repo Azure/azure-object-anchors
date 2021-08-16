@@ -12,8 +12,15 @@ using UnityEngine;
 
 using Microsoft.Azure.ObjectAnchors.Unity;
 
+#if WINDOWS_UWP
+using Windows.Storage;
+using Windows.Storage.Streams;
+#endif
+
 public class ObjectSearch : MonoBehaviour
 {
+    public enum SearchAreaKind { Box, FieldOfView, Sphere };
+
     [Tooltip("Far distance in meter of object search frustum.")]
     public float SearchFrustumFarDistance = 4.0f;
 
@@ -26,14 +33,11 @@ public class ObjectSearch : MonoBehaviour
     [Tooltip("Scale on model size to deduce object search area.")]
     public float SearchAreaScaleFactor = 2.0f;
 
-    [Tooltip("Search object in an bounding box in front of the user.")]
-    public bool SearchAreaAsBoundingBox = false;
+    [Tooltip("Search area shape.")]
+    public SearchAreaKind SearchAreaShape = SearchAreaKind.Box;
 
-    [Tooltip("Search object in the view frustum.")]
-    public bool SearchAreaAsFieldOfView = true;
-
-    [Tooltip("Search object in a sphere in front of the user.")]
-    public bool SearchAreaAsSphere = false;
+    [Tooltip("Observation mode.")]
+    public Microsoft.Azure.ObjectAnchors.ObjectObservationMode ObservationMode = Microsoft.Azure.ObjectAnchors.ObjectObservationMode.Ambient;
 
     [Tooltip("Search single vs. multiple instances.")]
     public bool SearchSingleInstance = true;
@@ -63,6 +67,30 @@ public class ObjectSearch : MonoBehaviour
     /// Bounding box associated with each object instance with guid as instance id.
     /// </summary>
     private Dictionary<Guid, WireframeBoundingBox> _boundingBoxes = new Dictionary<Guid, WireframeBoundingBox>();
+
+    /// <summary>
+    /// Query associated with each model with guid as model id.
+    /// </summary>
+    private Dictionary<Guid, Microsoft.Azure.ObjectAnchors.ObjectQuery> _objectQueries = new Dictionary<Guid, Microsoft.Azure.ObjectAnchors.ObjectQuery>();
+
+    private Dictionary<Guid, Microsoft.Azure.ObjectAnchors.ObjectQuery> InitializeObjectQueries()
+    {
+        var objectQueries = new Dictionary<Guid, Microsoft.Azure.ObjectAnchors.ObjectQuery>();
+
+        foreach (var modelId in _objectAnchorsService.ModelIds)
+        {
+            //
+            // Create a query and set the parameters.
+            //
+
+            var query = _objectAnchorsService.CreateObjectQuery(modelId, ObservationMode);
+            Debug.Assert(query != null);
+
+            objectQueries.Add(modelId, query);
+        }
+
+        return objectQueries;
+    }
 
     private enum ObjectAnchorsServiceEventKind
     {
@@ -116,7 +144,20 @@ public class ObjectSearch : MonoBehaviour
 
     private async void Start()
     {
-        await _objectAnchorsService.InitializeAsync();
+        try
+        {
+            await _objectAnchorsService.InitializeAsync();
+        }
+        catch (System.ArgumentException ex)
+        {
+#if WINDOWS_UWP
+            string message = ex.Message;
+            Windows.Foundation.IAsyncOperation<Windows.UI.Popups.IUICommand> dialog = null;
+            UnityEngine.WSA.Application.InvokeOnUIThread(() => dialog = new Windows.UI.Popups.MessageDialog(message, "Invalid account information").ShowAsync(), true);
+            await dialog;
+#endif // WINDOWS_UWP
+            throw ex;
+        }
 
         TextLogger.Log($"Object search initialized.");
 
@@ -126,6 +167,20 @@ public class ObjectSearch : MonoBehaviour
 
             await _objectAnchorsService.AddObjectModelAsync(file.Replace('/', '\\'));
         }
+
+#if WINDOWS_UWP
+        StorageFolder objects3d = KnownFolders.Objects3D;
+        foreach (string filePath in FileHelper.GetFilesInDirectory(objects3d.Path, "*.ou"))
+        {
+            TextLogger.Log($"Loading model ({Path.GetFileNameWithoutExtension(filePath)})");
+
+            byte[] buffer =  await ReadFileBytesAsync(filePath);
+
+            await _objectAnchorsService.AddObjectModelAsync(buffer);
+        }
+#endif
+
+        _objectQueries = InitializeObjectQueries();
 
         if (IsDiagnosticsCaptureEnabled)
         {
@@ -142,6 +197,12 @@ public class ObjectSearch : MonoBehaviour
         await _objectAnchorsService.StopDiagnosticsSessionAsync();
 
         RemoveObjectAnchorsListeners();
+
+        foreach (var objectQuery in _objectQueries)
+        {
+            objectQuery.Value.Dispose();
+        }
+        _objectQueries.Clear();
 
         _objectAnchorsService.Dispose();
     }
@@ -380,15 +441,18 @@ public class ObjectSearch : MonoBehaviour
 
         var trackingResults = _objectAnchorsService.TrackingResults;
 
-        foreach (var modelId in _objectAnchorsService.ModelIds)
+        foreach (var objectQuery in _objectQueries)
         {
+            var modelId = objectQuery.Key;
+            var query = objectQuery.Value;
+
             //
             // Optionally skip a model detection if an instance is already found.
             //
 
-            if(SearchSingleInstance)
+            if (SearchSingleInstance)
             {
-                if(trackingResults.Where(r => r.ModelId == modelId).Count() > 0)
+                if (trackingResults.Where(r => r.ModelId == modelId).Count() > 0)
                 {
                     continue;
                 }
@@ -397,63 +461,63 @@ public class ObjectSearch : MonoBehaviour
             var modelBox = _objectAnchorsService.GetModelBoundingBox(modelId);
             Debug.Assert(modelBox.HasValue);
 
-            //
-            // Create a query and set the parameters.
-            //
-
-            var query = _objectAnchorsService.CreateObjectQuery(modelId);
-            Debug.Assert(query != null);
-
-            if (SearchAreaAsBoundingBox)
+            query.SearchAreas.Clear();
+            switch (SearchAreaShape)
             {
-                // Adapt bounding box size to model size. Note that Extents.z is model's height.
-                float modelXYSize = new Vector2(modelBox.Value.Extents.x, modelBox.Value.Extents.y).magnitude;
-
-                var boundingBox = new ObjectAnchorsBoundingBox
+                case SearchAreaKind.Box:
                 {
-                    Center = estimatedTargetLocation.Position,
-                    Orientation = estimatedTargetLocation.Orientation,
-                    Extents = new Vector3(modelXYSize * SearchAreaScaleFactor, modelBox.Value.Extents.z * SearchAreaScaleFactor, modelXYSize * SearchAreaScaleFactor),
-                };
+                    // Adapt bounding box size to model size. Note that Extents.z is model's height.
+                    float modelXYSize = new Vector2(modelBox.Value.Extents.x, modelBox.Value.Extents.y).magnitude;
 
-                query.SearchAreas.Add(
-                    Microsoft.Azure.ObjectAnchors.ObjectSearchArea.FromOrientedBox(
-                        coordinateSystem.Value,
-                        boundingBox.ToSpatialGraph()));
-            }
+                    var boundingBox = new ObjectAnchorsBoundingBox
+                    {
+                        Center = estimatedTargetLocation.Position,
+                        Orientation = estimatedTargetLocation.Orientation,
+                        Extents = new Vector3(modelXYSize * SearchAreaScaleFactor, modelBox.Value.Extents.z * SearchAreaScaleFactor, modelXYSize * SearchAreaScaleFactor),
+                    };
 
-            if (SearchAreaAsFieldOfView)
-            {
-                var fieldOfView = new ObjectAnchorsFieldOfView
+                    query.SearchAreas.Add(
+                        Microsoft.Azure.ObjectAnchors.ObjectSearchArea.FromOrientedBox(
+                            coordinateSystem.Value,
+                            boundingBox.ToSpatialGraph()));
+                    break;
+                }
+
+                case SearchAreaKind.FieldOfView:
                 {
-                    Position = cameraLocation.Position,
-                    Orientation = cameraLocation.Orientation,
-                    FarDistance = SearchFrustumFarDistance,
-                    HorizontalFieldOfViewInDegrees = SearchFrustumHorizontalFovInDegrees,
-                    AspectRatio = SearchFrustumAspectRatio,
-                };
+                    var fieldOfView = new ObjectAnchorsFieldOfView
+                    {
+                        Position = cameraLocation.Position,
+                        Orientation = cameraLocation.Orientation,
+                        FarDistance = SearchFrustumFarDistance,
+                        HorizontalFieldOfViewInDegrees = SearchFrustumHorizontalFovInDegrees,
+                        AspectRatio = SearchFrustumAspectRatio,
+                    };
 
-                query.SearchAreas.Add(
-                    Microsoft.Azure.ObjectAnchors.ObjectSearchArea.FromFieldOfView(
-                        coordinateSystem.Value,
-                        fieldOfView.ToSpatialGraph()));
-            }
+                    query.SearchAreas.Add(
+                        Microsoft.Azure.ObjectAnchors.ObjectSearchArea.FromFieldOfView(
+                            coordinateSystem.Value,
+                            fieldOfView.ToSpatialGraph()));
+                    break;
+                }
 
-            if (SearchAreaAsSphere)
-            {
-                // Adapt sphere radius to model size.
-                float modelDiagonalSize = modelBox.Value.Extents.magnitude;
-
-                var sphere = new ObjectAnchorsSphere
+                case SearchAreaKind.Sphere:
                 {
-                    Center = estimatedTargetLocation.Position,
-                    Radius = modelDiagonalSize * 0.5f * SearchAreaScaleFactor,
-                };
+                    // Adapt sphere radius to model size.
+                    float modelDiagonalSize = modelBox.Value.Extents.magnitude;
 
-                query.SearchAreas.Add(
-                    Microsoft.Azure.ObjectAnchors.ObjectSearchArea.FromSphere(
-                        coordinateSystem.Value,
-                        sphere.ToSpatialGraph()));
+                    var sphere = new ObjectAnchorsSphere
+                    {
+                        Center = estimatedTargetLocation.Position,
+                        Radius = modelDiagonalSize * 0.5f * SearchAreaScaleFactor,
+                    };
+
+                    query.SearchAreas.Add(
+                        Microsoft.Azure.ObjectAnchors.ObjectSearchArea.FromSphere(
+                            coordinateSystem.Value,
+                            sphere.ToSpatialGraph()));
+                    break;
+                }
             }
 
             objectQueries.Add(query);
@@ -484,6 +548,28 @@ public class ObjectSearch : MonoBehaviour
 
         return _objectAnchorsService.DetectObjectAsync(objectQueries.ToArray());
     }
+
+#if WINDOWS_UWP
+    private async Task<byte[]> ReadFileBytesAsync(string filePath)
+    {
+        StorageFile file = await StorageFile.GetFileFromPathAsync(filePath);
+        if (file == null)
+        {
+            return null; 
+        }           
+
+        using (IRandomAccessStream stream = await file.OpenReadAsync())
+        {
+            using (var reader = new DataReader(stream.GetInputStreamAt(0)))
+            {
+                await reader.LoadAsync((uint)stream.Size);
+                var bytes = new byte[stream.Size];
+                reader.ReadBytes(bytes);
+                return bytes;
+            }
+        }
+    }    
+#endif
 
 }
 #endif

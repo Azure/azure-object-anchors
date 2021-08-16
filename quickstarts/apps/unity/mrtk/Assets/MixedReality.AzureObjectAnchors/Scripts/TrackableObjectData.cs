@@ -79,6 +79,10 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
         // is not around (0,0,0) or (0,floor,0)
         public ObjectAnchorsBoundingBox? logicalBoundingBox;
 
+        // The query parameters used to detect the object. For Active ObjectObserationMode, this
+        // includes the scanned environment data within the specified SearchAreas.
+        public ObjectQuery Query;
+
         public override string ToString()
         {
             return

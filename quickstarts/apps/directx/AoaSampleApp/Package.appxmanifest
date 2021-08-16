@@ -26,6 +26,7 @@
     <uap2:Capability Name="spatialPerception" />
     <Capability Name="internetClient"/>
     <Capability Name="internetClientServer"/>
+    <uap:Capability Name="objects3D"/>
     <DeviceCapability Name="webcam"/>
   </Capabilities>
 </Package>

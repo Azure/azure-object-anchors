@@ -26,13 +26,13 @@ namespace AoaSampleApp
 
         void SetColor(DirectX::XMFLOAT4 const& color);
 
-        void SetTransform(DirectX::XMFLOAT4X4 const& frameOfReferenceFromObject);
+        void SetTransform(winrt::Windows::Foundation::Numerics::float4x4 const& primitiveToFrameOfReference);
         void SetActive(bool isActive);
         void Render();
 
         // Property accessors.
         bool IsActive() const { return m_isActive; }
-        DirectX::XMFLOAT3 GetPosition() const;
+        winrt::Windows::Foundation::Numerics::float3 GetPosition() const;
 
     private:
        void RecreateVertexAndIndexBuffers(
@@ -65,7 +65,7 @@ namespace AoaSampleApp
         D3D11_PRIMITIVE_TOPOLOGY                        m_primitiveTopology{ D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED };
 
         // Transform from model to view.
-        DirectX::XMFLOAT4X4                             m_frameOfReferenceFromPrimitive;
+        winrt::Windows::Foundation::Numerics::float4x4  m_primitiveToFrameOfReference = winrt::Windows::Foundation::Numerics::float4x4::identity();
 
         // Color to render
         DirectX::XMFLOAT4                               m_modelColor;

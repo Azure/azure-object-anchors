@@ -45,12 +45,28 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
         /// <summary>
         /// The detection strategy to use.
         /// Auto
-        ///     - Objects will attempt to be be detected in the area round the user when no objects are detected
+        ///     - Objects will attempt to be be detected in the area around the user when no objects are detected
         ///       Object detection will stop once an object has been found.
         /// Manual
         ///     - Objects will attempt to be detected when requested through the StartQuery or QueueQueriesInBounds methods
         /// </summary>
         public DetectionStrategy ActiveDetectionStrategy = DetectionStrategy.Auto;
+
+        /// <summary>
+        /// The observation mode to use.
+        /// 
+        /// Ambient
+        ///     - Ambient observation relies on information about the environment that has been gathered by the system automatically
+        ///       as the user uses the device. This can result in quicker detection initially since the environment may already
+        ///       be scanned. However it may also contain stale data which can lead to poorer quality results. It is also limited
+        ///       to a standard resolution and area determined by the system, rather than tailored to the model.
+        /// Active
+        ///     - Active observation creates a fresh scan of the environment that is optimized for the model being detected.
+        ///       This avoids any problems with stale data, but requires the user to take some time to scan the environment
+        ///       before the object can be detected. Observations will continue to be accumulated until the query object
+        ///       is disposed, so re-using a query for multiple detections may produce quicker results.
+        /// </summary>
+        public ObjectObservationMode ObservationMode = ObjectObservationMode.Ambient;
 
         /// <summary>
         /// TrackingStrategy defines how a previously detected object will be updated
@@ -204,14 +220,36 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
             _trackableObjectDataLoader = TrackableObjectDataLoader.Instance;
 
             _awaiting = true;
-            await _objectAnchorsService.InitializeAsync();
+            try
+            {
+                await _objectAnchorsService.InitializeAsync();
+            }
+            catch (System.ArgumentException ex)
+            {
+#if WINDOWS_UWP
+                string message = ex.Message;
+                Windows.Foundation.IAsyncOperation<Windows.UI.Popups.IUICommand> dialog = null;
+                UnityEngine.WSA.Application.InvokeOnUIThread(() => dialog = new Windows.UI.Popups.MessageDialog(message, "Invalid account information").ShowAsync(), true);
+                await dialog;
+#endif // WINDOWS_UWP
+                throw ex;
+            }
             _objectAnchorsService.Pause();
-            bool hasObjects = await _trackableObjectDataLoader.LoadObjectModelsAsync(Application.persistentDataPath);
+
+            bool foundModelsInAppPath = false;
+            bool foundModelsInObjects3D = false;
+            
+            // Read models from LocalState folder
+            foundModelsInAppPath = await _trackableObjectDataLoader.LoadObjectModelsAsync(Application.persistentDataPath, ObservationMode);
+            // Read models from 3D Objects folder
+#if WINDOWS_UWP
+            foundModelsInObjects3D = await _trackableObjectDataLoader.LoadObjectModelsAsync(Windows.Storage.KnownFolders.Objects3D.Path, ObservationMode);
+#endif
             _awaiting = false;
 
             // if the trackable object loader doesn't find anything, may as well give up.
             // future: add a refresh button...
-            if (hasObjects)
+            if (foundModelsInAppPath || foundModelsInObjects3D)
             {
                 _objectAnchorsService.ObjectAdded += _objectAnchorsService_ObjectAdded;
                 _objectAnchorsService.ObjectUpdated += _objectAnchorsService_ObjectUpdated;
@@ -268,6 +306,9 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
 
         private void OnDestroy()
         {
+            _trackableObjectDataLoader.Dispose();
+            _trackableObjectDataLoader = null;
+
             _objectAnchorsService.Dispose();
             _objectAnchorsService = null;
         }
@@ -450,7 +491,7 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
 
             foreach (TrackableObjectData tod in _trackableObjectDataLoader.TrackableObjects)
             {
-                ObjectQuery nextQuery = _objectAnchorsService.CreateObjectQuery(tod.ModelId);
+                ObjectQuery nextQuery = tod.Query;
 
                 nextQuery.MaxScaleChange = MaxScaleChange;
 
@@ -463,10 +504,11 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
                 }
                 else
                 {
-                    nextQuery.MinSurfaceCoverage *= CoverageThresholdFactor;
+                    nextQuery.MinSurfaceCoverage = tod.MinSurfaceCoverageFromObjectModel * CoverageThresholdFactor;
                     nextQuery.ExpectedMaxVerticalOrientationInDegrees = AllowedVerticalOrientationInDegrees;
                 }
 
+                nextQuery.SearchAreas.Clear();
                 nextQuery.SearchAreas.Add(ObjectSearchArea.FromOrientedBox(
                        coordinateSystem.Value,
                        queryBounds.ToSpatialGraph())

@@ -14,8 +14,6 @@ PrimitiveRenderer::PrimitiveRenderer(std::shared_ptr<DeviceResources> const& dev
     : m_deviceResources(deviceResources)
 {
     CreateDeviceDependentResources();
-
-    XMStoreFloat4x4(&m_frameOfReferenceFromPrimitive, XMMatrixIdentity());
 }
 
 void PrimitiveRenderer::SetVerticesAndIndices(
@@ -68,21 +66,15 @@ void AoaSampleApp::PrimitiveRenderer::SetColor(DirectX::XMFLOAT4 const& color)
     m_modelConstantBufferData.color = m_modelColor;
 }
 
-void PrimitiveRenderer::SetTransform(XMFLOAT4X4 const& frameOfReferenceFromObject)
+void PrimitiveRenderer::SetTransform(float4x4 const& primitiveToFrameOfReference)
 {
-    m_frameOfReferenceFromPrimitive = frameOfReferenceFromObject;
+    m_primitiveToFrameOfReference = primitiveToFrameOfReference;
 }
 
-DirectX::XMFLOAT3 PrimitiveRenderer::GetPosition() const
+float3 PrimitiveRenderer::GetPosition() const
 { 
     // Compute the center of bounding box in reference coordinate system.
-    XMFLOAT3 center{};
-    XMVECTOR position = XMVector3Transform(XMLoadFloat3(&center), XMLoadFloat4x4(&m_frameOfReferenceFromPrimitive));
-
-    XMFLOAT3 pos;
-    XMStoreFloat3(&pos, position);
-
-    return pos;
+    return transform(float3::zero(), m_primitiveToFrameOfReference);
 }
 
 // Renders one frame using the vertex and pixel shaders.
@@ -168,15 +160,15 @@ void PrimitiveRenderer::Render()
 
             for (auto const& dir : c_directions)
             {
-                XMMATRIX referenceFromPointCloud =
+                XMMATRIX pointCloundToReference =
                     XMMatrixTranslationFromVector(XMLoadFloat3(&dir) * c_offset) *
-                    XMLoadFloat4x4(&m_frameOfReferenceFromPrimitive);
+                    XMLoadFloat4x4(&m_primitiveToFrameOfReference);
 
                 // The view and projection matrices are provided by the system; they are associated
                 // with holographic cameras, and updated on a per-camera basis.
                 // Here, we provide the model transform for the sample hologram. The model transform
                 // matrix is transposed to prepare it for the shader.
-                XMStoreFloat4x4(&m_modelConstantBufferData.model, XMMatrixTranspose(referenceFromPointCloud));
+                XMStoreFloat4x4(&m_modelConstantBufferData.model, XMMatrixTranspose(pointCloundToReference));
 
                 // Update the model transform buffer for the hologram.
                 context->UpdateSubresource(
@@ -203,7 +195,7 @@ void PrimitiveRenderer::Render()
             // with holographic cameras, and updated on a per-camera basis.
             // Here, we provide the model transform for the sample hologram. The model transform
             // matrix is transposed to prepare it for the shader.
-            XMStoreFloat4x4(&m_modelConstantBufferData.model, XMMatrixTranspose(XMLoadFloat4x4(&m_frameOfReferenceFromPrimitive)));
+            XMStoreFloat4x4(&m_modelConstantBufferData.model, XMMatrixTranspose(XMLoadFloat4x4(&m_primitiveToFrameOfReference)));
 
             // Update the model transform buffer for the hologram.
             context->UpdateSubresource(

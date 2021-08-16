@@ -638,7 +638,7 @@ PlayerSettings:
       LowLevelDevices: False
       Microphone: True
       MusicLibrary: False
-      Objects3D: False
+      Objects3D: True
       OfflineMapsManagement: False
       PhoneCall: False
       PhoneCallHistoryPublic: False

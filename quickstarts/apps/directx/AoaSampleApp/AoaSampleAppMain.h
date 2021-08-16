@@ -72,8 +72,10 @@ namespace AoaSampleApp
         // and when tearing down AppMain.
         void UnregisterHolographicEventHandlers();
 
+        winrt::Windows::Foundation::IAsyncAction InitializeAsync();
+
         // Load OU object models from application's local storage.
-        winrt::Windows::Foundation::IAsyncAction LoadObjectModelAsync();
+        winrt::Windows::Foundation::IAsyncAction LoadObjectModelAsync(winrt::Windows::Storage::StorageFolder const& rootFolder);
 
         // Check diagnostics flag and turn on diagnostics if required.
         winrt::Windows::Foundation::IAsyncAction TurnonDiagnosticsIfRequiredAsync();
@@ -95,13 +97,13 @@ namespace AoaSampleApp
 
             bool IsActive() const;
             void SetActive(bool flag);
-            void SetTransform(DirectX::XMFLOAT4X4 const& frameOfReferenceFromObject);
+            void SetTransform(winrt::Windows::Foundation::Numerics::float4x4 const& frameOfReferenceFromObject);
 
             void CreateDeviceDependentResources();
             void ReleaseDeviceDependentResources();
             void Render();
 
-            DirectX::XMFLOAT3 GetPosition() const;
+            winrt::Windows::Foundation::Numerics::float3 GetPosition() const;
         };
 
         std::unordered_map<winrt::guid, ObjectRenderer>             m_objectRenderers;

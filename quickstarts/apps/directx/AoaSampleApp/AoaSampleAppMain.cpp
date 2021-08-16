@@ -6,7 +6,9 @@
 #include "AoaSampleAppMain.h"
 
 #include <windows.graphics.directx.direct3d11.interop.h>
+#include <winrt/Windows.Storage.Search.h>
 #include <winrt/Windows.Data.Json.h>
+#include <winrt/Windows.UI.Popups.h>
 
 using namespace AoaSampleApp;
 using namespace concurrency;
@@ -29,6 +31,28 @@ namespace
     // Name of the file in application local cache that turns on diagnostics.
     constexpr WCHAR* c_DebugFilename = L"debug";
     constexpr WCHAR* c_ConfigurationFilename = L"ms-appx:///ObjectAnchorsConfig.json";
+
+    winrt::guid TryParseGuid(winrt::hstring const& value)
+    {
+        if (value.size() != 36 || value[8] != '-' || value[13] != '-' || value[18] != '-' || value[23] != '-')
+        {
+            throw std::invalid_argument(winrt::to_string(value) + " is not a valid GUID");
+        }
+        return winrt::guid{ value };
+    }
+
+    AccountInformation TryParseAccountInformation(winrt::hstring const& configuration) try
+    {
+        auto json = winrt::Windows::Data::Json::JsonObject::Parse(configuration);
+
+        // Throws an exception if the name doesn't exist in the json object.
+        return {
+            TryParseGuid(json.GetNamedString(L"AccountId")),
+            json.GetNamedString(L"AccountKey"),
+            json.GetNamedString(L"AccountDomain")
+        };
+    }
+    catch (...) { return nullptr; }
 
     static inline DirectX::BoundingOrientedBox GetObjectModelBoundingBox(winrt::Microsoft::Azure::ObjectAnchors::ObjectModel const& model)
     {
@@ -62,7 +86,7 @@ void AoaSampleAppMain::ObjectRenderer::SetActive(bool flag)
     PointCloudRenderer->SetActive(flag);
 }
 
-void AoaSampleAppMain::ObjectRenderer::SetTransform(DirectX::XMFLOAT4X4 const& frameOfReferenceFromObject)
+void AoaSampleAppMain::ObjectRenderer::SetTransform(float4x4 const& frameOfReferenceFromObject)
 {
     BoundingBoxRenderer->SetTransform(frameOfReferenceFromObject);
     PointCloudRenderer->SetTransform(frameOfReferenceFromObject);
@@ -86,9 +110,9 @@ void AoaSampleAppMain::ObjectRenderer::Render()
     PointCloudRenderer->Render();
 }
 
-DirectX::XMFLOAT3 AoaSampleAppMain::ObjectRenderer::GetPosition() const
+float3 AoaSampleAppMain::ObjectRenderer::GetPosition() const
 {
-    DirectX::XMFLOAT3 position{};
+    float3 position{};
 
     if (PointCloudRenderer->IsActive())
     {
@@ -126,9 +150,32 @@ AoaSampleAppMain::AoaSampleAppMain(std::shared_ptr<DeviceResources> const& devic
 
     // Acquire the current state of the default HolographicDisplay and its SpatialLocator.
     OnHolographicDisplayIsAvailableChanged(nullptr, nullptr);
+}
 
-    // Load object model and start tracking objects.
-    m_initializeOperation = LoadObjectModelAsync();
+winrt::Windows::Foundation::IAsyncAction AoaSampleAppMain::InitializeAsync()
+{
+    // Parse account id, key and domain
+    auto configuration = co_await PathIO::ReadTextAsync(c_ConfigurationFilename);
+
+    AccountInformation accountInformation = TryParseAccountInformation(configuration);
+    if (!accountInformation)
+    {
+        winrt::Windows::UI::Popups::MessageDialog message(
+            L"Please update ObjectAnchorsConfig.json in the Assets folder of the project.",
+            L"Invalid account information");
+        co_await message.ShowAsync();
+        co_return;
+    }
+
+    m_objectTrackerPtr = std::make_unique<ObjectTracker>(accountInformation);
+
+    co_await LoadObjectModelAsync(ApplicationData::Current().LocalFolder());
+    co_await LoadObjectModelAsync(KnownFolders::Objects3D());
+
+    // Turn on diagnostics if a "debug" file existing in the local cache.
+    // This check is required to be after loading models, otherwise the diagnostics session will not
+    // include object models.
+    co_await TurnonDiagnosticsIfRequiredAsync();
 }
 
 AoaSampleAppMain::~AoaSampleAppMain()
@@ -208,113 +255,86 @@ void AoaSampleAppMain::UnregisterHolographicEventHandlers()
     }
 }
 
-winrt::Windows::Foundation::IAsyncAction AoaSampleAppMain::LoadObjectModelAsync()
+winrt::Windows::Foundation::IAsyncAction AoaSampleAppMain::LoadObjectModelAsync(const StorageFolder& rootFolder)
 {
-    auto localFolder{ ApplicationData::Current().LocalFolder() };
+    auto fileQuery = rootFolder.CreateFileQueryWithOptions(Search::QueryOptions{
+            Search::CommonFileQuery::OrderByName,
+            { L".ou" }
+        });
 
-    // Parse account id, key and domain
-    auto configuration = co_await PathIO::ReadTextAsync(c_ConfigurationFilename);
-
-    auto json = winrt::Windows::Data::Json::JsonObject::Parse(configuration);
-
-    // Throw exception if the name doesn't exist in the json object.
-    AccountInformation accountInformation = {
-        winrt::guid(json.GetNamedString(L"AccountId")),
-        json.GetNamedString(L"AccountKey"),
-        json.GetNamedString(L"AccountDomain")
-    };
-
-    m_objectTrackerPtr = std::make_unique<ObjectTracker>(accountInformation);
-
-    for (auto const& file : co_await localFolder.GetFilesAsync())
+    for (auto const& file : co_await fileQuery.GetFilesAsync())
     {
-        const std::wstring filePath = file.Path().c_str();
-        const std::string extension = GetFilenameExtension(WideStringToString(filePath));
-        if (_strcmpi(extension.c_str(), "ou") == 0)
-        {
-            const auto id = co_await m_objectTrackerPtr->AddObjectModelAsync(filePath);
-            const auto model = m_objectTrackerPtr->GetObjectModel(id);
+        const auto id = co_await m_objectTrackerPtr->AddObjectModelAsync(file);
+        const auto model = m_objectTrackerPtr->GetObjectModel(id);
 
 #ifdef DRAW_SAMPLE_CONTENT
-            ObjectRenderer renderer;
-            renderer.BoundingBoxRenderer = std::make_unique<PrimitiveRenderer>(m_deviceResources);
-            renderer.PointCloudRenderer = std::make_unique<PrimitiveRenderer>(m_deviceResources);
+        ObjectRenderer renderer;
+        renderer.BoundingBoxRenderer = std::make_unique<PrimitiveRenderer>(m_deviceResources);
+        renderer.PointCloudRenderer = std::make_unique<PrimitiveRenderer>(m_deviceResources);
 
-            // Setup bounding box renderer
-            {
-                std::vector<DirectX::XMFLOAT3> vertices;
-                std::vector<uint32_t> indices;
-                GetBoundingBoxVerticesAndIndices(model.BoundingBox(), vertices, indices);
+        // Setup bounding box renderer
+        {
+            std::vector<DirectX::XMFLOAT3> vertices;
+            std::vector<uint32_t> indices;
+            GetBoundingBoxVerticesAndIndices(model.BoundingBox(), vertices, indices);
 
-                renderer.BoundingBoxRenderer->SetVerticesAndIndices(
-                    vertices.data(),
-                    static_cast<uint32_t>(vertices.size()),
-                    indices.data(),
-                    static_cast<uint32_t>(indices.size()),
-                    D3D11_PRIMITIVE_TOPOLOGY_LINELIST
-                );
+            renderer.BoundingBoxRenderer->SetVerticesAndIndices(
+                vertices.data(),
+                static_cast<uint32_t>(vertices.size()),
+                indices.data(),
+                static_cast<uint32_t>(indices.size()),
+                D3D11_PRIMITIVE_TOPOLOGY_LINELIST
+            );
 
-                renderer.BoundingBoxRenderer->SetColor(c_Magenta);
-            }
-
-            // Setup model point cloud renderer
-            {
-                std::vector<float3> vertices(model.VertexCount());
-                model.GetVertexPositions(vertices);
-
-                D3D_PRIMITIVE_TOPOLOGY topology;
-                std::vector<uint32_t> indices;
-
-                if (model.TriangleIndexCount() == 0)
-                {
-                    indices.resize(vertices.size());
-                    std::iota(indices.begin(), indices.end(), uint32_t(0));
-
-                    topology = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST;
-                }
-                else
-                {
-                    indices.resize(model.TriangleIndexCount());
-                    model.GetTriangleIndices(indices);
-
-                    topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-                }
-
-                renderer.PointCloudRenderer->SetVerticesAndIndices(
-                    reinterpret_cast<DirectX::XMFLOAT3*>(vertices.data()),
-                    static_cast<uint32_t>(vertices.size()),
-                    indices.data(),
-                    static_cast<uint32_t>(indices.size()),
-                    topology
-                );
-
-                renderer.PointCloudRenderer->SetColor(c_Magenta);
-            }
-
-            m_objectRenderers.emplace(id, std::move(renderer));
-#endif //DRAW_SAMPLE_CONTENT
+            renderer.BoundingBoxRenderer->SetColor(c_Magenta);
         }
-    }
 
-    // Turn on diagnostics if a "debug" file existing in the local cache.
-    // This check is required to be after loading models, otherwise the diagnostics session will not
-    // include object models.
-    if (co_await localFolder.TryGetItemAsync(c_DebugFilename) != nullptr)
-    {
-        co_await m_objectTrackerPtr->StartDiagnosticsAsync();
+        // Setup model point cloud renderer
+        {
+            std::vector<float3> vertices(model.VertexCount());
+            model.GetVertexPositions(vertices);
+
+            D3D_PRIMITIVE_TOPOLOGY topology;
+            std::vector<uint32_t> indices;
+
+            if (model.TriangleIndexCount() == 0)
+            {
+                indices.resize(vertices.size());
+                std::iota(indices.begin(), indices.end(), uint32_t(0));
+
+                topology = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST;
+            }
+            else
+            {
+                indices.resize(model.TriangleIndexCount());
+                model.GetTriangleIndices(indices);
+
+                topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+            }
+
+            renderer.PointCloudRenderer->SetVerticesAndIndices(
+                reinterpret_cast<DirectX::XMFLOAT3*>(vertices.data()),
+                static_cast<uint32_t>(vertices.size()),
+                indices.data(),
+                static_cast<uint32_t>(indices.size()),
+                topology
+            );
+
+            renderer.PointCloudRenderer->SetColor(c_Magenta);
+        }
+
+        m_objectRenderers.emplace(id, std::move(renderer));
+#endif //DRAW_SAMPLE_CONTENT
     }
 }
 
 winrt::Windows::Foundation::IAsyncAction AoaSampleAppMain::TurnonDiagnosticsIfRequiredAsync()
 {
-    // Check if a file named "debug" existing in the local cache folder.
+    // Check if a file named "debug" existing in the local cache folder or the 3D Objects folder
     // If exists, turn on diagnostics, otherwise turn it off.
 
-    auto localFolder{ ApplicationData::Current().LocalFolder() };
-
-    auto file = co_await localFolder.TryGetItemAsync(c_DebugFilename);
-
-    if (file != nullptr)
+    if (co_await ApplicationData::Current().LocalFolder().TryGetItemAsync(c_DebugFilename) ||
+        co_await KnownFolders::Objects3D().TryGetItemAsync(c_DebugFilename))
     {
         co_await m_objectTrackerPtr->StartDiagnosticsAsync();
     }
@@ -510,6 +530,12 @@ winrt::Windows::Foundation::IAsyncAction AoaSampleAppMain::UpdateObjectSearchAre
 // Updates the application state once per frame.
 HolographicFrame AoaSampleAppMain::Update(HolographicFrame const& previousFrame)
 {
+    if (!m_initializeOperation)
+    {
+        // Load object model and start tracking objects.
+        m_initializeOperation = InitializeAsync();
+    }
+
     // TODO: Put CPU work that does not depend on the HolographicCameraPose here.
 
     // Apps should wait for the optimal time to begin pose-dependent work.
@@ -561,7 +587,7 @@ HolographicFrame AoaSampleAppMain::Update(HolographicFrame const& previousFrame)
     std::vector<TrackedObject> trackedObjects;
 
 #ifdef DRAW_SAMPLE_CONTENT
-    if (m_stationaryReferenceFrame != nullptr)
+    if (m_stationaryReferenceFrame && m_objectTrackerPtr)
     {
         SpatialInteractionSourceState pointerState = m_spatialInputHandler->CheckForInput();
 
@@ -648,7 +674,7 @@ HolographicFrame AoaSampleAppMain::Update(HolographicFrame const& previousFrame)
             }
             else
             {
-                renderer.second.SetTransform(it->RelativePoseToFrameOfReference);
+                renderer.second.SetTransform(make_float4x4_scale(it->ScaleChange) * it->CenterToCoordinateSystemTransform);
                 renderer.second.SetActive(true);
             }
         }
@@ -684,7 +710,7 @@ HolographicFrame AoaSampleAppMain::Update(HolographicFrame const& previousFrame)
             {
                 renderingParameters.SetFocusPoint(
                     m_stationaryReferenceFrame.CoordinateSystem(),
-                    reinterpret_cast<float3 const&>(it->second.GetPosition())
+                    it->second.GetPosition()
                 );
             }
         }
@@ -913,6 +939,12 @@ void AoaSampleAppMain::OnCameraAdded(
         //     camera's CameraPose and use it to create the ID3D11RenderTargetView for this camera.
         //     Content can then be rendered for the HolographicCamera.
         m_deviceResources->AddHolographicCamera(holographicCamera);
+
+        // Enable optional second camera when photo/video camera is active to render directly into the camera's view.
+        if (auto photoVideoViewConfiguration = holographicCamera.Display().TryGetViewConfiguration(HolographicViewConfigurationKind::PhotoVideoCamera))
+        {
+            photoVideoViewConfiguration.IsEnabled(true);
+        }
 
         // Holographic frame predictions will not include any information about this camera until
         // the deferral is completed.

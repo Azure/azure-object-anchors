@@ -1,19 +1,18 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
+using Azure;
+using Azure.Core.Diagnostics;
+using Azure.MixedReality.ObjectAnchors.Conversion;
+using Azure.Storage.Blobs;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using System;
 using System.Diagnostics.Tracing;
 using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using Azure;
-using Azure.Core.Diagnostics;
-using Azure.MixedReality.ObjectAnchors.Conversion;
-using Azure.MixedReality.ObjectAnchors.Conversion.Models;
-using Azure.Storage.Blobs;
-using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 
 namespace ConversionQuickstart
 {
@@ -21,7 +20,7 @@ namespace ConversionQuickstart
     {
         private const string OptionalConfigFileName = "Config_AOA.json";
 
-        private Configuration configuration;
+        private readonly Configuration configuration;
 
         public static async Task<int> Main(string[] args)
         {
@@ -82,11 +81,10 @@ namespace ConversionQuickstart
                     // Upload our asset
                     Console.WriteLine("Attempting to upload asset...");
                     Uri assetUri = (await client.GetAssetUploadUriAsync()).Value.UploadUri;
+                    Console.WriteLine($"\tUpload Uri: {assetUri}");
                     BlobClient uploadBlobClient = new BlobClient(assetUri);
-                    using (FileStream fs = File.OpenRead(configuration.InputAssetPath))
-                    {
-                        await uploadBlobClient.UploadAsync(fs);
-                    }
+                    await UploadBlobAsync(uploadBlobClient, configuration.InputAssetPath);
+                    Console.WriteLine("\nAsset uploaded");
 
                     // Schedule our asset conversion job specifying:
                     // - The uri to our uploaded asset
@@ -94,7 +92,7 @@ namespace ConversionQuickstart
                     // - Gravity direction of 3D asset
                     // - The unit of measurement of the 3D asset
                     Console.WriteLine("Attempting to create asset conversion job...");
-                    var assetOptions = new AssetConversionOptions(
+                    AssetConversionOptions assetOptions = new AssetConversionOptions(
                         assetUri,
                         AssetFileType.FromFilePath(configuration.InputAssetPath),
                         configuration.Gravity,
@@ -111,7 +109,7 @@ namespace ConversionQuickstart
 
                 // Wait for job to complete
                 Console.WriteLine("Waiting for job completion...");
-                var response = await conversionOperation.WaitForCompletionAsync(new CancellationTokenSource((int)configuration.WaitForJobCompletionTimeout.TotalMilliseconds).Token);
+                Response<AssetConversionProperties> response = await conversionOperation.WaitForCompletionAsync(new CancellationTokenSource((int)configuration.WaitForJobCompletionTimeout.TotalMilliseconds).Token);
                 returnValue = EvaluateJobResults(response.Value);
 
                 if (response.Value.ConversionStatus == AssetConversionStatus.Succeeded)
@@ -179,7 +177,7 @@ namespace ConversionQuickstart
             catch (AssetFileTypeNotSupportedException ex)
             {
                 returnValue = 1;
-                var supportedFileTypeList = string.Join(", ", ex.SupportedAssetFileTypes);
+                string supportedFileTypeList = string.Join(", ", ex.SupportedAssetFileTypes);
                 Console.Error.WriteLine($"The provided asset file of type {ex.AttemptedFileType} is not supported. Supported file types include {supportedFileTypeList}.");
             }
             catch (TaskCanceledException)
@@ -195,10 +193,47 @@ namespace ConversionQuickstart
             catch (Exception e)
             {
                 returnValue = 1;
-                Console.Error.WriteLine($"\n{e.GetType().Name}:\n{e.Message}");
+                PrintException(e);
             }
 
             return returnValue;
+        }
+
+        private static async Task UploadBlobAsync(BlobClient blobClient, string fileToUploadPath)
+        {
+            Progress<long> progressHandler = null;
+
+            if (!Console.IsOutputRedirected)
+            {
+                FileInfo file = new FileInfo(fileToUploadPath);
+                long uploadFileSize = file.Length;
+
+                object lockObj = new object();
+                int consoleRow = Console.CursorTop;
+                progressHandler = new Progress<long>();
+                progressHandler.ProgressChanged += new EventHandler<long>(delegate (object sender, long bytesUploaded)
+                {
+                    lock (lockObj)
+                    {
+                        Console.SetCursorPosition(0, consoleRow);
+                        Console.Write($"\tProgress: {((float)bytesUploaded / uploadFileSize) * 100: 00.00}%");
+                    }
+                });
+            }
+
+            using (FileStream fs = File.OpenRead(fileToUploadPath))
+            {
+                await blobClient.UploadAsync(fs, progressHandler: progressHandler);
+            }
+        }
+
+        private void PrintException(Exception e)
+        {
+            Console.Error.WriteLine($"\n{e.GetType().Name}:\n{e.Message}");
+            if (e.InnerException != null)
+            {
+                PrintException(e.InnerException);
+            }
         }
 
         private static int EvaluateJobResults(AssetConversionProperties jobResults)

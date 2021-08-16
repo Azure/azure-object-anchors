@@ -115,54 +115,41 @@ using namespace winrt::Windows::Foundation::Numerics;
 }
 
 // Get vertices and triangle indices of a field of view.
- void AoaSampleApp::GetFieldOfViewVerticesAndIndices(SpatialFieldOfView const& fieldOfView, vector<XMFLOAT3>& vertices, vector<uint32_t>& indices)
+void AoaSampleApp::GetFieldOfViewVerticesAndIndices(SpatialFieldOfView const& fieldOfView, vector<XMFLOAT3>& vertices, vector<uint32_t>& indices)
 {
-    // 8 corners position of bounding frustum.
-    //
-    //     Far     Near
-    //    0----1  4----5
-    //    |    |  |    |
-    //    |    |  |    |
-    //    3----2  7----6
+    // BoundingFrustum is constructed with +Z forward, so add a 180-degree rotation about Y to point it towards -Z instead
+    // (forward in a right-handed coordinate system with +X right and +Y up).
+    static const quaternion rotate180AboutYAxis = make_quaternion_from_axis_angle(float3::unit_y(), XM_PI);
+    const quaternion orientation = fieldOfView.Orientation * rotate180AboutYAxis;
 
-    XMFLOAT4X4 M;
-    memset(&M, 0, sizeof(M));
-
-    const float nearPlane = 0.1f;
-    const float farPlane = fieldOfView.FarDistance;
-
-    const float w = 1.0f / tanf(fieldOfView.HorizontalFieldOfViewInDegrees * 0.5f * 3.1415926f / 180.0f);
-    const float h = w * fieldOfView.AspectRatio;
-    const float Q = farPlane / (farPlane - nearPlane);
-
-    // Projection matrix in LH coordinate system.
-    M(0, 0) = w;
-    M(1, 1) = h;
-    M(2, 2) = Q;
-    M(2, 3) = 1;
-    M(3, 2) = -Q * nearPlane;
-
-    // Frustum in LH coordinate system.
+    // Note that the naming of BoundingFrustum's fields are expressed in a left-handed coordinate system; however, left/right
+    // simply refer to -X/+X. Therefore when used in a right-handed coordinate system, "left"/"right" are swapped.
     BoundingFrustum frustum;
-    BoundingFrustum::CreateFromMatrix(frustum, XMLoadFloat4x4(&M));
+    frustum.Origin = { fieldOfView.Position.x, fieldOfView.Position.y, fieldOfView.Position.z };
+    frustum.Orientation = { orientation.x, orientation.y, orientation.z, orientation.w };
+    frustum.Near = 0.1f;
+    frustum.Far = fieldOfView.FarDistance;
+    frustum.RightSlope = tanf(0.5f * XM_PI * fieldOfView.HorizontalFieldOfViewInDegrees / 180.f);
+    frustum.LeftSlope = -frustum.RightSlope;
+    frustum.TopSlope = frustum.RightSlope / fieldOfView.AspectRatio;
+    frustum.BottomSlope = -frustum.TopSlope;
 
-    // Transform its location to RH coordinate system by rotating about +Y by 180 degrees.
-    XMMATRIX transform =
-        XMMatrixRotationY(3.1415926f) *
-        XMMatrixRotationQuaternion(XMLoadFloat4(&reinterpret_cast<XMFLOAT4 const&>(fieldOfView.Orientation))) *
-        XMMatrixTranslationFromVector(XMLoadFloat3(&reinterpret_cast<XMFLOAT3 const&>(fieldOfView.Position)));
-
-    BoundingFrustum frustumTrans;
-    frustum.Transform(frustumTrans, transform);
+    // 8 corners position of bounding frustum in a right-handed system (see above).
+    //
+    //     Near    Far
+    //    1----0  5----4
+    //    |    |  |    |
+    //    |    |  |    |
+    //    2----3  6----7
 
     array<XMFLOAT3, 8> corners;
-    frustumTrans.GetCorners(corners.data());
+    frustum.GetCorners(corners.data());
 
     array<uint32_t, 24> c_boundsOutlineIndices =
     {
         {
-            0, 1, 1, 2, 2, 3, 3, 0,     // far plane
-            4, 5, 5, 6, 6, 7, 7, 4,     // near plane
+            0, 1, 1, 2, 2, 3, 3, 0,     // near plane
+            4, 5, 5, 6, 6, 7, 7, 4,     // far plane
             0, 4, 1, 5, 2, 6, 3, 7,     // far to near
         },
     };
