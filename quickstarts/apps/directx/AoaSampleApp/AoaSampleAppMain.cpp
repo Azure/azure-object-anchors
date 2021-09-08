@@ -257,13 +257,23 @@ void AoaSampleAppMain::UnregisterHolographicEventHandlers()
 
 winrt::Windows::Foundation::IAsyncAction AoaSampleAppMain::LoadObjectModelAsync(const StorageFolder& rootFolder)
 {
-    auto fileQuery = rootFolder.CreateFileQueryWithOptions(Search::QueryOptions{
-            Search::CommonFileQuery::OrderByName,
-            { L".ou" }
-        });
+    // Round-trip through the path to ensure consistent access to known folders like 3D Objects.
+    const auto rootFolderByPath = co_await StorageFolder::GetFolderFromPathAsync(rootFolder.Path());
 
-    for (auto const& file : co_await fileQuery.GetFilesAsync())
+    for (auto const& item : co_await rootFolderByPath.GetItemsAsync())
     {
+        if (item.IsOfType(StorageItemTypes::Folder))
+        {
+            co_await LoadObjectModelAsync(item.as<StorageFolder>());
+            continue;
+        }
+
+        const auto file = item.as<StorageFile>();
+        if (file.FileType() != L".ou")
+        {
+            continue;
+        }
+
         const auto id = co_await m_objectTrackerPtr->AddObjectModelAsync(file);
         const auto model = m_objectTrackerPtr->GetObjectModel(id);
 

@@ -333,6 +333,11 @@ public class ObjectSearch : MonoBehaviour
             bbox.gameObject.SetActive(false);
             bbox.UpdateBounds(boundingBox.Value.Center, Vector3.Scale(boundingBox.Value.Extents, instance.ScaleChange), boundingBox.Value.Orientation, WireframeMaterial);
 
+            var mesh = new GameObject("Model Mesh");
+            var material = mesh.AddComponent<MeshRenderer>().sharedMaterial = WireframeMaterial;
+            mesh.transform.SetParent(bbox.transform);
+            MeshLoader.AddMesh(mesh, _objectAnchorsService, instance.ModelId);
+
             _boundingBoxes.Add(instance.InstanceId, bbox);
         }
         else

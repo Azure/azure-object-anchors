@@ -14,55 +14,74 @@ public class MeshLoader : MonoBehaviour
     async void Start()
     {
         Debug.Log($"Loading model from: '{ModelPath}'");
-
-        MeshFilter meshFilter = gameObject.AddComponent<MeshFilter>();
-        Mesh mesh = new Mesh();
+        byte[] modelBytes = File.ReadAllBytes(ModelPath);
 
         ObjectAnchorsSession session = new ObjectAnchorsSession(ObjectAnchorsConfig.GetConfig().AccountInformation);
-        ObjectObserver observer = session.CreateObjectObserver();
-        byte[] modelBytes = File.ReadAllBytes(ModelPath);
-        ObjectModel model = await observer.LoadObjectModelAsync(modelBytes);
+        using (ObjectObserver observer = session.CreateObjectObserver())
+        using (ObjectModel model = await observer.LoadObjectModelAsync(modelBytes))
+        {
+            Numerics.Vector3[] modelVertices = new Numerics.Vector3[model.VertexCount];
+            model.GetVertexPositions(modelVertices);
 
-        gameObject.transform.localPosition = model.BoundingBox.Center.ToUnity();
-        gameObject.transform.localRotation = model.BoundingBox.Orientation.ToUnity();
+            // Counter clock wise
+            uint[] modelIndicesCcw = new uint[model.TriangleIndexCount];
+            model.GetTriangleIndices(modelIndicesCcw);
+
+            Numerics.Vector3[] modelNormals = new Numerics.Vector3[model.VertexCount];
+            model.GetVertexNormals(modelNormals);
+
+            AddMesh(gameObject,
+                modelVertices,
+                modelNormals,
+                modelIndicesCcw);
+        }
+    }
+
+    static void AddMesh(GameObject gameObject,
+        Numerics.Vector3[] modelVertices,
+        Numerics.Vector3[] modelNormals,
+        uint[] modelIndicesCcw)
+    {
+        MeshFilter meshFilter = gameObject.AddComponent<MeshFilter>();
+        Mesh mesh = new Mesh();
 
         // We need to flip handedness of vertices and modify triangle list to
         // clockwise winding in order to be usable in Unity.
 
-        Numerics.Vector3[] modelVertices = new Numerics.Vector3[model.VertexCount];
-        model.GetVertexPositions(modelVertices);
         mesh.vertices = modelVertices.Select(v => v.ToUnity()).ToArray();
         if (modelVertices.Length > UInt16.MaxValue)
         {
             mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
         }
 
-        if (model.TriangleIndexCount > 2)
+        if (modelIndicesCcw.Length > 2)
         {
-            // Counter clock wise
-            uint[] modelIndices_ccw = new uint[model.TriangleIndexCount];
-            model.GetTriangleIndices(modelIndices_ccw);
-
             // Clock wise
-            int[] modelIndices_cw = new int[modelIndices_ccw.Length];
-            Enumerable.Range(0, modelIndices_ccw.Length).Select(i =>
+            int[] modelIndicesCw = new int[modelIndicesCcw.Length];
+            Enumerable.Range(0, modelIndicesCcw.Length).Select(i =>
                 i % 3 == 0 ?
-                modelIndices_cw[i] = (int)modelIndices_ccw[i] : i % 3 == 1 ?
-                modelIndices_cw[i] = (int)modelIndices_ccw[i + 1] : modelIndices_cw[i] = (int)modelIndices_ccw[i - 1])
+                modelIndicesCw[i] = (int)modelIndicesCcw[i] : i % 3 == 1 ?
+                modelIndicesCw[i] = (int)modelIndicesCcw[i + 1] : modelIndicesCw[i] = (int)modelIndicesCcw[i - 1])
                 .ToArray();
 
-            mesh.SetIndices(modelIndices_cw, MeshTopology.Triangles, 0);
+            mesh.SetIndices(modelIndicesCw, MeshTopology.Triangles, 0);
         }
         else
         {
             mesh.SetIndices(Enumerable.Range(0, modelVertices.Length).ToArray(), MeshTopology.Points, 0);
         }
 
-        Numerics.Vector3[] modelNormals = new Numerics.Vector3[model.VertexCount];
-        model.GetVertexNormals(modelNormals);
         mesh.normals = modelNormals.Select(v => v.ToUnity()).ToArray();
 
         mesh.RecalculateBounds();
         meshFilter.mesh = mesh;
+    }
+
+    public static void AddMesh(GameObject gameObject, IObjectAnchorsService service, Guid modelId)
+    {
+        AddMesh(gameObject,
+            service.GetModelVertexPositions(modelId),
+            service.GetModelVertexNormals(modelId),
+            new uint[] { });
     }
 }
