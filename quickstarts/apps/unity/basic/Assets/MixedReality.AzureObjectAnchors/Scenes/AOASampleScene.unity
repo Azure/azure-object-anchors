@@ -294,9 +294,11 @@ MonoBehaviour:
   SearchAreaScaleFactor: 2
   SearchAreaShape: 0
   ObservationMode: 0
+  ShowEnvironmentObservations: 0
   SearchSingleInstance: 1
   DiagnosticsSentinelFilename: debug
   WireframeMaterial: {fileID: 2100000, guid: 7f82994d006a3ca479d97a7e3e2a91d3, type: 2}
+  EnvironmentMaterial: {fileID: 2100000, guid: 32755c3686530d84b8eb04201b47d39b, type: 2}
 --- !u!4 &333623253
 Transform:
   m_ObjectHideFlags: 0

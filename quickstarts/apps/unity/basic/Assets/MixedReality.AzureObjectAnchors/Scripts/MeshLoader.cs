@@ -30,56 +30,77 @@ public class MeshLoader : MonoBehaviour
             Numerics.Vector3[] modelNormals = new Numerics.Vector3[model.VertexCount];
             model.GetVertexNormals(modelNormals);
 
-            AddMesh(gameObject,
-                modelVertices,
-                modelNormals,
-                modelIndicesCcw);
+            gameObject.AddComponent<MeshFilter>().mesh = LoadMesh(modelVertices, modelNormals, modelIndicesCcw);
         }
     }
 
-    static void AddMesh(GameObject gameObject,
+    public static Mesh LoadMesh(
         Numerics.Vector3[] modelVertices,
         Numerics.Vector3[] modelNormals,
         uint[] modelIndicesCcw)
     {
-        MeshFilter meshFilter = gameObject.AddComponent<MeshFilter>();
         Mesh mesh = new Mesh();
+        LoadMesh(mesh, new MeshData(modelVertices, modelNormals, modelIndicesCcw));
+        return mesh;
+    }
+
+    public struct MeshData
+    {
+        public readonly Vector3[] vertices;
+        public readonly Vector3[] normals;
+        public readonly int[] indices;
+        public readonly MeshTopology topology;
+
+        public MeshData(
+            Numerics.Vector3[] modelVertices,
+            Numerics.Vector3[] modelNormals,
+            uint[] modelIndicesCcw)
+        {
+            vertices = modelVertices.Select(v => v.ToUnity()).ToArray();
+
+            if (modelIndicesCcw.Length > 2)
+            {
+                // Clock wise
+                int[] modelIndicesCw = indices = new int[modelIndicesCcw.Length];
+                Enumerable.Range(0, modelIndicesCcw.Length).Select(i =>
+                    i % 3 == 0 ?
+                    modelIndicesCw[i] = (int)modelIndicesCcw[i] : i % 3 == 1 ?
+                    modelIndicesCw[i] = (int)modelIndicesCcw[i + 1] : modelIndicesCw[i] = (int)modelIndicesCcw[i - 1])
+                    .ToArray();
+
+                topology = MeshTopology.Triangles;
+            }
+            else
+            {
+                indices = Enumerable.Range(0, modelVertices.Length).ToArray();
+                topology = MeshTopology.Points;
+            }
+
+            normals = modelNormals.Select(v => v.ToUnity()).ToArray();
+        }
+    }
+
+    public static void LoadMesh(Mesh mesh, MeshData meshData)
+    {
+        mesh.Clear();
 
         // We need to flip handedness of vertices and modify triangle list to
         // clockwise winding in order to be usable in Unity.
 
-        mesh.vertices = modelVertices.Select(v => v.ToUnity()).ToArray();
-        if (modelVertices.Length > UInt16.MaxValue)
+        mesh.vertices = meshData.vertices;
+        if (mesh.vertices.Length > ushort.MaxValue)
         {
             mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
         }
 
-        if (modelIndicesCcw.Length > 2)
-        {
-            // Clock wise
-            int[] modelIndicesCw = new int[modelIndicesCcw.Length];
-            Enumerable.Range(0, modelIndicesCcw.Length).Select(i =>
-                i % 3 == 0 ?
-                modelIndicesCw[i] = (int)modelIndicesCcw[i] : i % 3 == 1 ?
-                modelIndicesCw[i] = (int)modelIndicesCcw[i + 1] : modelIndicesCw[i] = (int)modelIndicesCcw[i - 1])
-                .ToArray();
-
-            mesh.SetIndices(modelIndicesCw, MeshTopology.Triangles, 0);
-        }
-        else
-        {
-            mesh.SetIndices(Enumerable.Range(0, modelVertices.Length).ToArray(), MeshTopology.Points, 0);
-        }
-
-        mesh.normals = modelNormals.Select(v => v.ToUnity()).ToArray();
-
+        mesh.SetIndices(meshData.indices, meshData.topology, 0);
+        mesh.normals = meshData.normals;
         mesh.RecalculateBounds();
-        meshFilter.mesh = mesh;
     }
 
     public static void AddMesh(GameObject gameObject, IObjectAnchorsService service, Guid modelId)
     {
-        AddMesh(gameObject,
+        gameObject.AddComponent<MeshFilter>().mesh = LoadMesh(
             service.GetModelVertexPositions(modelId),
             service.GetModelVertexNormals(modelId),
             new uint[] { });
