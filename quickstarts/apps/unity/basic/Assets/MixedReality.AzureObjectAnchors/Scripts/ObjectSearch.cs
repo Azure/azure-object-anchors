@@ -39,6 +39,9 @@ public class ObjectSearch : MonoBehaviour
     [Tooltip("Observation mode.")]
     public Microsoft.Azure.ObjectAnchors.ObjectObservationMode ObservationMode = Microsoft.Azure.ObjectAnchors.ObjectObservationMode.Ambient;
 
+    [Tooltip("Show environment observations.")]
+    public bool ShowEnvironmentObservations = false;
+
     [Tooltip("Search single vs. multiple instances.")]
     public bool SearchSingleInstance = true;
 
@@ -47,6 +50,9 @@ public class ObjectSearch : MonoBehaviour
 
     [Tooltip("Material used to render a wire frame.")]
     public Material WireframeMaterial;
+
+    [Tooltip("Material used to render the environment.")]
+    public Material EnvironmentMaterial;
 
     /// <summary>
     /// Flag to indicate the detection operation, 0 - in detection, 1 - detection completed.
@@ -71,11 +77,10 @@ public class ObjectSearch : MonoBehaviour
     /// <summary>
     /// Query associated with each model with guid as model id.
     /// </summary>
-    private Dictionary<Guid, Microsoft.Azure.ObjectAnchors.ObjectQuery> _objectQueries = new Dictionary<Guid, Microsoft.Azure.ObjectAnchors.ObjectQuery>();
-
-    private Dictionary<Guid, Microsoft.Azure.ObjectAnchors.ObjectQuery> InitializeObjectQueries()
+    private Dictionary<Guid, ObjectQueryState> _objectQueries = new Dictionary<Guid, ObjectQueryState>();
+    private Dictionary<Guid, ObjectQueryState> InitializeObjectQueries()
     {
-        var objectQueries = new Dictionary<Guid, Microsoft.Azure.ObjectAnchors.ObjectQuery>();
+        var objectQueries = new Dictionary<Guid, ObjectQueryState>();
 
         foreach (var modelId in _objectAnchorsService.ModelIds)
         {
@@ -83,10 +88,14 @@ public class ObjectSearch : MonoBehaviour
             // Create a query and set the parameters.
             //
 
-            var query = _objectAnchorsService.CreateObjectQuery(modelId, ObservationMode);
-            Debug.Assert(query != null);
+            var queryState = new GameObject($"ObjectQueryState for model {modelId}").AddComponent<ObjectQueryState>();
+            queryState.Query = _objectAnchorsService.CreateObjectQuery(modelId, ObservationMode);
+            if (ShowEnvironmentObservations)
+            {
+                queryState.EnvironmentMaterial = EnvironmentMaterial;
+            }
 
-            objectQueries.Add(modelId, query);
+            objectQueries.Add(modelId, queryState);
         }
 
         return objectQueries;
@@ -198,10 +207,6 @@ public class ObjectSearch : MonoBehaviour
 
         RemoveObjectAnchorsListeners();
 
-        foreach (var objectQuery in _objectQueries)
-        {
-            objectQuery.Value.Dispose();
-        }
         _objectQueries.Clear();
 
         _objectAnchorsService.Dispose();
@@ -449,7 +454,7 @@ public class ObjectSearch : MonoBehaviour
         foreach (var objectQuery in _objectQueries)
         {
             var modelId = objectQuery.Key;
-            var query = objectQuery.Value;
+            var query = objectQuery.Value.Query;
 
             //
             // Optionally skip a model detection if an instance is already found.
