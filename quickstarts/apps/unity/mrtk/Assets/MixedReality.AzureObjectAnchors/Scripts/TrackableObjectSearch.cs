@@ -56,7 +56,6 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
             _objectTracker.TrackingStrategy = ObjectTracker.TrackingModeStrategy.Coarse;
 
             _searchAreaControl = SearchAreaBoundingBox.GetComponent<SearchAreaController>();
-            
 
             SearchAreaBoundingBox.SetActive(true);
 
@@ -67,7 +66,6 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
 
             _initialized.Set();
         }
-
 
         private void OnDestroy()
         {
@@ -90,9 +88,6 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
                     _objectAnchorsService.RemoveObjectInstance(instance.InstanceId);
                 }
             }
-
-            // hide most of the bounding box if doing a query or we have a tracked object
-            _searchAreaControl.SetBoxRendering(!_objectTracker.QueryActive && _objectTracker.TrackedObjectCount == 0);
         }
 
 #endregion

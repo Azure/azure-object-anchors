@@ -1,5 +1,9 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
+#if WINDOWS_UWP || DOTNETWINRT_PRESENT
+#define SPATIALCOORDINATESYSTEM_API_PRESENT
+#endif
+
 #if UNITY_WSA
 using Microsoft.MixedReality.Toolkit;
 using System;
@@ -52,6 +56,8 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
         /// </summary>
         public DetectionStrategy ActiveDetectionStrategy = DetectionStrategy.Auto;
 
+        private ObjectObservationMode _observationMode = ObjectObservationMode.Ambient;
+
         /// <summary>
         /// The observation mode to use.
         /// 
@@ -66,7 +72,12 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
         ///       before the object can be detected. Observations will continue to be accumulated until the query object
         ///       is disposed, so re-using a query for multiple detections may produce quicker results.
         /// </summary>
-        public ObjectObservationMode ObservationMode = ObjectObservationMode.Ambient;
+        [HideInInspector]
+        public ObjectObservationMode ObservationMode
+        {
+            get => _observationMode;
+            set { _observationMode = value; UpdateQueue.Enqueue(InitializeQueries); }
+        }
 
         /// <summary>
         /// TrackingStrategy defines how a previously detected object will be updated
@@ -119,6 +130,29 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
         /// The gameobject to represent a detected object
         /// </summary>
         public GameObject TrackedObjectPrefab;
+
+        /// <summary>
+        /// The gameobject to represent an environment obseration
+        /// </summary>
+        public GameObject EnvironmentObservationPrefab;
+
+        private bool _showEnvironmentObservations = false;
+
+        /// <summary>
+        /// Whether to show environment observations during object search
+        /// </summary>
+        [HideInInspector]
+        public bool ShowEnvironmentObservations
+        {
+            get => _showEnvironmentObservations;
+            set { _showEnvironmentObservations = value; UpdateEnvironmentObservationVisuals(); }
+        }
+
+        private GameObject _environmentObservationVisuals;
+        private void UpdateEnvironmentObservationVisuals()
+        {
+            _environmentObservationVisuals.SetActive(ShowEnvironmentObservations && _objectAnchorsService.Status == ObjectAnchorsServiceStatus.Running);
+        }
 
         /// <summary>
         /// True while we are awaiting a query to complete
@@ -197,6 +231,70 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
 
         private TrackableObjectDataLoader _trackableObjectDataLoader;
 
+        class TrackableObjectQuery : IDisposable
+        {
+            public TrackableObjectData TrackableObjectData;
+            public ObjectQuery Query;
+            public EnvironmentObservationRenderer EnvironmentObservation;
+
+            public void Dispose()
+            {
+                if (EnvironmentObservation != null)
+                {
+                    Destroy(EnvironmentObservation.gameObject);
+                }
+
+                Query.Dispose();
+            }
+        }
+
+        void DisposeQueries()
+        {
+            if (_trackableObjectQueries != null)
+            {
+                foreach (var toq in _trackableObjectQueries)
+                {
+                    toq.Dispose();
+                }
+                _trackableObjectQueries = null;
+            }
+        }
+
+        void InitializeQueries()
+        {
+            DisposeQueries();
+            _trackableObjectQueries = _trackableObjectDataLoader.TrackableObjects.Select(InitializeQuery).ToList();
+
+            // In principle, each ObjectQuery may have distinct observations of the environment, depending on differences in 
+            // search area, model resolution, and observation mode. In practice, in this sample all queries are created
+            // with the same parameters (except for the model). Therefore environment observations are only visualized for
+            // the first once since it would be redundant to do this for all of them. However, this could be repeated
+            // for additional queries with differing parameters as needed.
+            UpdateEnvironmentObservationVisuals();
+            if (_trackableObjectQueries.Count != 0)
+            {
+                var toq = _trackableObjectQueries.First();
+                toq.EnvironmentObservation = Instantiate(EnvironmentObservationPrefab).GetComponent<EnvironmentObservationRenderer>();
+                toq.EnvironmentObservation.transform.parent = _environmentObservationVisuals.transform;
+                toq.EnvironmentObservation.Query = toq.Query;
+                toq.EnvironmentObservation.EnvironmentTopology =
+                    ObservationMode == ObjectObservationMode.Ambient ? // Ambient observation mode only supports providing a point cloud.
+                        EnvironmentObservationTopology.PointCloud :
+                        EnvironmentObservationTopology.TriangleList;
+            }
+        }
+
+        TrackableObjectQuery InitializeQuery(TrackableObjectData tod)
+        {
+            TrackableObjectQuery toq = new TrackableObjectQuery();
+            toq.TrackableObjectData = tod;
+            toq.Query = ObjectAnchorsService.GetService().CreateObjectQuery(tod.ModelId, ObservationMode);
+            tod.MinSurfaceCoverageFromObjectModel = toq.Query.MinSurfaceCoverage;
+            return toq;
+        }
+
+        private List<TrackableObjectQuery> _trackableObjectQueries;
+
         // Queue of queries to run
         private ConcurrentQueue<Tuple<ObjectAnchorsBoundingBox, IEnumerable<ObjectQuery>>> _queryQueue = new ConcurrentQueue<Tuple<ObjectAnchorsBoundingBox, IEnumerable<ObjectQuery>>>();
 
@@ -228,8 +326,8 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
             {
 #if WINDOWS_UWP
                 string message = ex.Message;
-                Windows.Foundation.IAsyncOperation<Windows.UI.Popups.IUICommand> dialog = null;
-                UnityEngine.WSA.Application.InvokeOnUIThread(() => dialog = new Windows.UI.Popups.MessageDialog(message, "Invalid account information").ShowAsync(), true);
+                global::Windows.Foundation.IAsyncOperation<global::Windows.UI.Popups.IUICommand> dialog = null;
+                UnityEngine.WSA.Application.InvokeOnUIThread(() => dialog = new global::Windows.UI.Popups.MessageDialog(message, "Invalid account information").ShowAsync(), true);
                 await dialog;
 #endif // WINDOWS_UWP
                 throw ex;
@@ -240,11 +338,15 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
             bool foundModelsInObjects3D = false;
             
             // Read models from LocalState folder
-            foundModelsInAppPath = await _trackableObjectDataLoader.LoadObjectModelsAsync(Application.persistentDataPath, ObservationMode);
+            foundModelsInAppPath = await _trackableObjectDataLoader.LoadObjectModelsAsync(Application.persistentDataPath);
             // Read models from 3D Objects folder
 #if WINDOWS_UWP
-            foundModelsInObjects3D = await _trackableObjectDataLoader.LoadObjectModelsAsync(Windows.Storage.KnownFolders.Objects3D.Path, ObservationMode);
+            foundModelsInObjects3D = await _trackableObjectDataLoader.LoadObjectModelsAsync(global::Windows.Storage.KnownFolders.Objects3D.Path);
 #endif
+
+            _environmentObservationVisuals = new GameObject("Environment Observation Visuals");
+            InitializeQueries();
+
             _awaiting = false;
 
             // if the trackable object loader doesn't find anything, may as well give up.
@@ -306,6 +408,8 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
 
         private void OnDestroy()
         {
+            DisposeQueries();
+
             _trackableObjectDataLoader.Dispose();
             _trackableObjectDataLoader = null;
 
@@ -334,6 +438,7 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
                     }
                     break;
             }
+            UpdateEnvironmentObservationVisuals();
         }
 
         private void _objectAnchorsService_ObjectRemoved(object sender, IObjectAnchorsServiceEventArgs e)
@@ -478,7 +583,7 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
             List<ObjectQuery> nextQuerySet = new List<ObjectQuery>();
             SpatialGraph.SpatialGraphCoordinateSystem? coordinateSystem = null;
 
-#if WINDOWS_UWP
+#if SPATIALCOORDINATESYSTEM_API_PRESENT
             var worldOrigin = ObjectAnchorsWorldManager.WorldOrigin;
             coordinateSystem = await System.Threading.Tasks.Task.Run(() => worldOrigin?.TryToSpatialGraph());
 #endif
@@ -489,9 +594,10 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
                 return;
             }
 
-            foreach (TrackableObjectData tod in _trackableObjectDataLoader.TrackableObjects)
+            foreach (TrackableObjectQuery toq in _trackableObjectQueries)
             {
-                ObjectQuery nextQuery = tod.Query;
+                var tod = toq.TrackableObjectData;
+                ObjectQuery nextQuery = toq.Query;
 
                 nextQuery.MaxScaleChange = MaxScaleChange;
 

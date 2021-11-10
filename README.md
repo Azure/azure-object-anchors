@@ -27,7 +27,7 @@ The quickstart samples can be found in the `quickstarts` folder.
 
 Learn how to use the Azure Object Anchors service to convert a 3D asset into an Azure Object Anchors model to be used in an app.
 
-* [Create a model](https://docs.microsoft.com/azure/object-anchors/quickstarts/get-started-model-ingestion)
+* [Create a model](https://docs.microsoft.com/azure/object-anchors/quickstarts/get-started-model-conversion)
 
 ### Apps
 

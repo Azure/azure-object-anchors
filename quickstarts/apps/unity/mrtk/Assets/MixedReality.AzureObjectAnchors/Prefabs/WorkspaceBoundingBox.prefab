@@ -55,7 +55,7 @@ MeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2602960748448577579}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
@@ -164,6 +164,9 @@ MonoBehaviour:
   oneHandRotationModeNear: 1
   oneHandRotationModeFar: 1
   releaseBehavior: 3
+  transformSmoothingLogicType:
+    reference: Microsoft.MixedReality.Toolkit.Utilities.DefaultTransformSmoothingLogic,
+      Microsoft.MixedReality.Toolkit.SDK
   smoothingFar: 1
   smoothingNear: 1
   moveLerpTime: 0.001
@@ -255,6 +258,7 @@ MonoBehaviour:
   boundsCalculationMethod: 0
   activation: 0
   flattenAxis: 0
+  uniformScaleOnFlattenedAxis: 1
   boxPadding: {x: 0, y: 0, z: 0}
   boxDisplayConfiguration: {fileID: 0}
   linksConfiguration: {fileID: 0}

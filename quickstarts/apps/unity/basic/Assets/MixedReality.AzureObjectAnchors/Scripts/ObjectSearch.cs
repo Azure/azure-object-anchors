@@ -1,5 +1,9 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
+#if WINDOWS_UWP || DOTNETWINRT_PRESENT
+#define SPATIALCOORDINATESYSTEM_API_PRESENT
+#endif
+
 #if UNITY_WSA
 using System;
 using System.Collections.Generic;
@@ -207,7 +211,17 @@ public class ObjectSearch : MonoBehaviour
 
         RemoveObjectAnchorsListeners();
 
-        _objectQueries.Clear();
+        lock (_objectQueries)
+        {
+            foreach (var query in _objectQueries)
+            {
+                if (query.Value != null)
+                {
+                    Destroy(query.Value.gameObject);
+                }
+            }
+            _objectQueries.Clear();
+        }
 
         _objectAnchorsService.Dispose();
     }
@@ -373,7 +387,7 @@ public class ObjectSearch : MonoBehaviour
                 Orientation = _cachedCameraMain.transform.rotation,
             };
 
-#if WINDOWS_UWP
+#if SPATIALCOORDINATESYSTEM_API_PRESENT
             var coordinateSystem = ObjectAnchorsWorldManager.WorldOrigin;
 
             Task.Run(async () =>
@@ -451,6 +465,7 @@ public class ObjectSearch : MonoBehaviour
 
         var trackingResults = _objectAnchorsService.TrackingResults;
 
+        lock (_objectQueries)
         foreach (var objectQuery in _objectQueries)
         {
             var modelId = objectQuery.Key;
