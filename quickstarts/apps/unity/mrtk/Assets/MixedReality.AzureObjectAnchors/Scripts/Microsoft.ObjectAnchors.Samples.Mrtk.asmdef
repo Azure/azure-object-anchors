@@ -1,0 +1,19 @@
+﻿{
+	"name": "Microsoft.ObjectAnchors.Samples.Mrtk",
+    "references": [
+        "Microsoft.MixedReality.Toolkit",
+        "Microsoft.MixedReality.Toolkit.SDK",
+        "Microsoft.ObjectAnchors.Runtime.Api.Editor",
+        "Microsoft.ObjectAnchors.Runtime.Api.WSA",
+        "Microsoft.ObjectAnchors.Runtime.Core",
+        "Unity.TextMeshPro",
+        "Unity.TextMeshPro.Editor"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.microsoft.windows.mixedreality.dotnetwinrt",
+            "expression": "",
+            "define": "DOTNETWINRT_PRESENT"
+        }
+    ]
+}

@@ -1,0 +1,15 @@
+﻿{
+	"name": "Microsoft.ObjectAnchors.Samples.Basic",
+    "references": [
+        "Microsoft.ObjectAnchors.Runtime.Api.Editor",
+        "Microsoft.ObjectAnchors.Runtime.Api.WSA",
+        "Microsoft.ObjectAnchors.Runtime.Core"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.microsoft.windows.mixedreality.dotnetwinrt",
+            "expression": "",
+            "define": "DOTNETWINRT_PRESENT"
+        }
+    ]
+}

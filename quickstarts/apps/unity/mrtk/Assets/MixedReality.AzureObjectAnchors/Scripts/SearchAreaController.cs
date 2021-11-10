@@ -34,9 +34,6 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
             {
                 _isSearchAreaLocked = value;
 
-                // Render wireframe only if locked.
-                _searchAreaBboxMeshRender.enabled = !value;
-
                 // Disable drag and drop if locked.
                 _searchAreaBboxManipulationHandler.enabled = !value;
             }
@@ -60,7 +57,6 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
 
         private IObjectAnchorsService _objectAnchorsService;
         private BoundsControl _searchAreaBounds;
-        private MeshRenderer _searchAreaBboxMeshRender;
         private ObjectManipulator _searchAreaBboxManipulationHandler;
         private TrackableObjectDataLoader _trackableObjectDataLoader;
         private AutonomousSearchArea _automaticSearchAreaMovementController;
@@ -82,7 +78,6 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
             //
             // Find bounding box components.
             //
-            _searchAreaBboxMeshRender = GetComponent<MeshRenderer>();
             _searchAreaBboxManipulationHandler = GetComponent<ObjectManipulator>();
             _searchAreaBboxManipulationHandler.OnManipulationEnded.AddListener(BoundingBoxMoved);
             _searchAreaBounds = GetComponent<BoundsControl>();
@@ -153,11 +148,6 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
             transform.SetPositionAndRotation(position, rotation);
             transform.localScale = size;
             SearchAreaMoved?.Invoke(this, EventArgs.Empty);
-        }
-
-        public void SetBoxRendering(bool EnableBoxRendering)
-        {
-            _searchAreaBboxMeshRender.enabled = EnableBoxRendering && !SearchAreaLocked;
         }
 
         private void BoundingBoxMoved(ManipulationEventData data)

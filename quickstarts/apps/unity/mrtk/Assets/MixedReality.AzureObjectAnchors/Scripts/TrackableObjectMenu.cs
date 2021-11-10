@@ -25,6 +25,9 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
         [Tooltip("The toggle spatial mapping button")]
         public Interactable ToggleSpatialMappingButton = null;
 
+        [Tooltip("The toggle active observation button")]
+        public Interactable ToggleActiveObservationButton = null;
+
         [Tooltip("The toggle high accuracy button")]
         public Interactable ToggleHighAccuracyButton = null;
 
@@ -48,6 +51,9 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
 
         [Tooltip("The angle tolerance toggle")]
         public Interactable AngleToleranceToggle = null;
+
+        [Tooltip("The show environment observations toggle")]
+        public Interactable ShowEnvironmentObservationsToggle = null;
 
         [Tooltip("The coverage slider label")]
         public TextMesh CoverageRatioSliderLabel = null;
@@ -99,6 +105,7 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
 
             StopSearchButton.gameObject.SetActive(true);
             StartSearchButton.gameObject.SetActive(false);
+            ToggleActiveObservationButton.IsEnabled = false;
 
             _textToSpeech.Speak("Object tracking started.");
         }
@@ -108,6 +115,7 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
             ObjectAnchorsService.GetService().Pause();
             StopSearchButton.gameObject.SetActive(false);
             StartSearchButton.gameObject.SetActive(true);
+            ToggleActiveObservationButton.IsEnabled = true;
 
             _textToSpeech.Speak("Object tracking stopped.");
         }
@@ -140,6 +148,12 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
                 smc.CycleObserver();
                 _textToSpeech.Speak($"spatial mapping set to {SpatialMappingController.ObserverModeNames[smc.CurrentObserverMode]}");
             }
+        }
+
+        public void ToggleActiveObservationMode()
+        {
+            _objectTracker.ObservationMode = ToggleActiveObservationButton.IsToggled ? ObjectObservationMode.Active : ObjectObservationMode.Ambient;
+            _textToSpeech.Speak("Active observation mode " + (ToggleActiveObservationButton.IsToggled ? "on." : "off."));
         }
 
         public void ToggleHighAccuracyTrackingMode()
@@ -194,6 +208,12 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
         {
             _objectTracker.AllowedVerticalOrientationInDegrees = AngleToleranceToggle.IsToggled ? 10 : 0;
             Debug.Log($"Toggle Angle Tolerance {_objectTracker.AllowedVerticalOrientationInDegrees} {AngleToleranceToggle.IsToggled}");
+        }
+
+        public void ToggleShowEnvironmentObservations()
+        {
+            _objectTracker.ShowEnvironmentObservations = ShowEnvironmentObservationsToggle.IsToggled;
+            Debug.Log($"Toggle Show Environment Observations {_objectTracker.ShowEnvironmentObservations}");
         }
     }
 }

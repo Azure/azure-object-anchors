@@ -56,7 +56,7 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
             return result;
         }
 
-        public async Task<bool> LoadObjectModelsAsync(string modelPath, ObjectObservationMode observationMode)
+        public async Task<bool> LoadObjectModelsAsync(string modelPath)
         {
             IObjectAnchorsService objectAnchorsService = ObjectAnchorsService.GetService();
             Debug.Log($"{Application.persistentDataPath} {objectAnchorsService != null}");
@@ -82,11 +82,10 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
 
                 if (trackableObject.ModelId != Guid.Empty)
                 {
-                    // Query the default coverage threshold from this object model.
-                    trackableObject.Query = objectAnchorsService.CreateObjectQuery(trackableObject.ModelId, observationMode);
-                    trackableObject.MinSurfaceCoverageFromObjectModel = trackableObject.Query.MinSurfaceCoverage;
+                    trackableObject.ModelMesh = new Mesh();
+                    await trackableObject.ModelMesh.SetFromObjectModel(trackableObject.ModelId);
+                    Debug.Log($"mesh has {trackableObject.ModelMesh.triangles.Length} indices");
 
-                    trackableObject.ModelMesh = GenerateMesh(trackableObject.ModelId);
                     trackableObject.logicalBoundingBox = objectAnchorsService.GetModelBoundingBox(trackableObject.ModelId);
                     _trackableObjects.Add(trackableObject);
                     _modelIdToTrackableObject.Add(trackableObject.ModelId, trackableObject);
@@ -104,61 +103,6 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
                 ModelsLoaded?.Invoke(this, EventArgs.Empty);
             }
             return _trackableObjects.Count > 0;
-        }
-
-        /// <summary>
-        /// Generates a mesh from an Azure Object Anchors SDK model
-        /// Flips handedness of vertices and modifies triangle list to 
-        /// clockwise winding in order to be usable in Unity.
-        /// </summary>
-        /// <param name="modelId">The id of the model to get the mesh for</param>
-        /// <returns>A mesh with the requested model's geometry</returns>
-        private Mesh GenerateMesh(Guid modelId)
-        {
-            IObjectAnchorsService objectAnchorsService = ObjectAnchorsService.GetService();
-            var vertices = objectAnchorsService.GetModelVertexPositions(modelId);
-            int[] indices = (int[])(object)objectAnchorsService.GetModelTriangleIndices(modelId);
-            Debug.Log($"mesh has {indices.Length} indices");
-            Mesh mesh = new Mesh();
-            Vector3[] unityVertices = new Vector3[vertices.Length];
-
-            for (int k = 0; k < vertices.Length; k++)
-            {
-                unityVertices[k] = vertices[k].ToUnity();
-            }
-
-            mesh.vertices = unityVertices;
-
-            if (unityVertices.Length > 65535)
-            {
-                mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-            }
-
-            if (indices != null && indices.Length > 2)
-            {
-                for (int k = 0; k < indices.Length - 2; k += 3)
-                {
-                    int tmp = indices[k + 2];
-                    indices[k + 2] = indices[k + 1];
-                    indices[k + 1] = tmp;
-                }
-                mesh.SetIndices(indices, MeshTopology.Triangles, 0);
-            }
-            else
-            {
-                int[] vertexIndices = new int[vertices.Length];
-
-                for (int k = 0; k < vertices.Length; k++)
-                {
-                    vertexIndices[k] = k;
-                }
-
-                mesh.SetIndices(vertexIndices, MeshTopology.Points, 0);
-            }
-
-            mesh.RecalculateBounds();
-            mesh.RecalculateNormals();
-            return mesh;
         }
 
 #if WINDOWS_UWP
@@ -185,10 +129,6 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
 
         public void Dispose()
         {
-            foreach (var tod in _trackableObjects)
-            {
-                tod.Query.Dispose();
-            }
             _trackableObjects.Clear();
             _instance = null;
         }
