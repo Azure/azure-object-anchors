@@ -534,7 +534,7 @@ winrt::Windows::Foundation::IAsyncAction AoaSampleAppMain::UpdateObjectSearchAre
     m_boundsRenderer->SetActive(!boundingVolumeVertices.empty() && !boundingVolumeVertexIndices.empty());
 
     m_lastSearchArea = searchArea;
-    co_await m_objectTrackerPtr->DetectAsync(searchArea);
+    co_await m_objectTrackerPtr->DetectAsync(frameOfReference, searchArea);
 }
 
 // Updates the application state once per frame.
@@ -660,7 +660,7 @@ HolographicFrame AoaSampleAppMain::Update(HolographicFrame const& previousFrame)
 
 #endif
 
-    m_timer.Tick([this, &trackedObjects]()
+    m_timer.Tick([this, &trackedObjects, &prediction]()
     {
         //
         // TODO: Update scene objects.
@@ -671,6 +671,8 @@ HolographicFrame AoaSampleAppMain::Update(HolographicFrame const& previousFrame)
         //
 
 #ifdef DRAW_SAMPLE_CONTENT
+        const SpatialLocation viewLocation = m_spatialLocator.TryLocateAtTimestamp(prediction.Timestamp(), m_stationaryReferenceFrame.CoordinateSystem());
+
         for (auto& renderer : m_objectRenderers)
         {
             auto it = std::find_if(trackedObjects.cbegin(), trackedObjects.cend(), [&renderer](auto const& obj)
@@ -684,7 +686,9 @@ HolographicFrame AoaSampleAppMain::Update(HolographicFrame const& previousFrame)
             }
             else
             {
-                renderer.second.SetTransform(make_float4x4_scale(it->ScaleChange) * it->CenterToCoordinateSystemTransform);
+                const SpatialPose modelPose = it->ComputeModelPoseForView({ viewLocation.Position(), viewLocation.Orientation() }, it->CoordinateSystemToPlacement);
+
+                renderer.second.SetTransform(make_float4x4_from_quaternion(modelPose.Orientation) * make_float4x4_translation(modelPose.Position));
                 renderer.second.SetActive(true);
             }
         }

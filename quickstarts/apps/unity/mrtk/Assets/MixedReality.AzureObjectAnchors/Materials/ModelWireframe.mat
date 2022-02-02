@@ -60,7 +60,7 @@ Material:
     - _BlendOp: 0
     - _BumpScale: 1
     - _ColorWriteMask: 15
-    - _CullMode: 0
+    - _CullMode: 2
     - _CustomMode: 0
     - _Cutoff: 0.5
     - _DetailNormalMapScale: 1
@@ -75,7 +75,7 @@ Material:
     - _RenderQueueOverride: -1
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
-    - _SrcBlend: 1
+    - _SrcBlend: 5
     - _UVSec: 0
     - _WireThickness: 100
     - _ZOffsetFactor: 0
@@ -83,7 +83,7 @@ Material:
     - _ZTest: 4
     - _ZWrite: 1
     m_Colors:
-    - _BaseColor: {r: 0, g: 0, b: 0, a: 0}
+    - _BaseColor: {r: 0, g: 0, b: 0, a: 0.2509804}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - _WireColor: {r: 1, g: 1, b: 1, a: 0.5019608}
+    - _WireColor: {r: 1, g: 1, b: 1, a: 0.7529412}

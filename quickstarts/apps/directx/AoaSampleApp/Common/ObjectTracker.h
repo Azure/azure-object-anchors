@@ -18,12 +18,12 @@
 
 namespace AoaSampleApp
 {
-    struct TrackedObject : winrt::Microsoft::Azure::ObjectAnchors::ObjectInstanceState
+    struct TrackedObject : winrt::Microsoft::Azure::ObjectAnchors::ObjectInstancePlacement
     {
-        TrackedObject(ObjectInstanceState const& state) : ObjectInstanceState(state) {}
+        TrackedObject(ObjectInstancePlacement const& placement) : ObjectInstancePlacement(placement) {}
 
         winrt::guid ModelId;
-        winrt::Windows::Foundation::Numerics::float4x4 CenterToCoordinateSystemTransform;
+        winrt::Windows::Foundation::Numerics::float4x4 CoordinateSystemToPlacement;
     };
 
     class ObjectTracker
@@ -36,7 +36,9 @@ namespace AoaSampleApp
         winrt::Windows::Foundation::IAsyncOperation<winrt::guid> AddObjectModelAsync(winrt::Windows::Storage::StorageFile file);
         winrt::Microsoft::Azure::ObjectAnchors::ObjectModel GetObjectModel(winrt::guid const& id) const;
 
-        winrt::Windows::Foundation::IAsyncAction DetectAsync(winrt::Microsoft::Azure::ObjectAnchors::ObjectSearchArea searchArea);
+        winrt::Windows::Foundation::IAsyncAction DetectAsync(
+            winrt::Windows::Perception::Spatial::Preview::SpatialGraphInteropFrameOfReferencePreview const& interopReferenceFrame,
+            winrt::Microsoft::Azure::ObjectAnchors::ObjectSearchArea const& searchArea);
 
         winrt::Windows::Foundation::IAsyncAction StartDiagnosticsAsync();
         winrt::Windows::Foundation::IAsyncOperation<winrt::hstring> StopDiagnosticsAsync();
@@ -72,8 +74,8 @@ namespace AoaSampleApp
         struct ObjectInstanceMetadata
         {
             winrt::Microsoft::Azure::ObjectAnchors::ObjectInstance::Changed_revoker ChangedSubscription;
-            winrt::Microsoft::Azure::ObjectAnchors::ObjectInstanceState State;
-            winrt::Windows::Perception::Spatial::SpatialCoordinateSystem CenterCoordinateSystem;
+            winrt::Microsoft::Azure::ObjectAnchors::ObjectInstancePlacement Placement;
+            winrt::Windows::Perception::Spatial::SpatialCoordinateSystem PlacementCoordinateSystem;
         };
 
         std::unordered_map<winrt::Microsoft::Azure::ObjectAnchors::ObjectInstance, ObjectInstanceMetadata> m_instances;
@@ -84,6 +86,7 @@ namespace AoaSampleApp
         winrt::handle m_stopWorker{ nullptr };
         std::thread m_detectionWorker;
 
+        winrt::Windows::Perception::Spatial::Preview::SpatialGraphInteropFrameOfReferencePreview m_interopReferenceFrame{ nullptr };
         winrt::Microsoft::Azure::ObjectAnchors::ObjectSearchArea m_searchArea{ nullptr };
         winrt::Microsoft::Azure::ObjectAnchors::ObjectInstanceTrackingMode m_trackingMode{ winrt::Microsoft::Azure::ObjectAnchors::ObjectInstanceTrackingMode::LowLatencyCoarsePosition };
         float m_maxScaleChange{ 0.1f };

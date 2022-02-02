@@ -148,6 +148,42 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
             set { _showEnvironmentObservations = value; UpdateEnvironmentObservationVisuals(); }
         }
 
+        private bool _multiAnchorPlacement = true;
+
+        /// <summary>
+        /// Whether to use multi-anchor placement for detected object instances
+        /// </summary>
+        [HideInInspector]
+        public bool MultiAnchorPlacement
+        {
+            get => _multiAnchorPlacement;
+            set { _multiAnchorPlacement = value; }
+        }
+
+        private bool _singleAnchorPlacement = false;
+
+        /// <summary>
+        /// Whether to use single-anchor placement for detected object instances
+        /// </summary>
+        [HideInInspector]
+        public bool SingleAnchorPlacement
+        {
+            get => _singleAnchorPlacement;
+            set { _singleAnchorPlacement = value; }
+        }
+
+        private bool _scaleSingleAnchorPlacement = false;
+
+        /// <summary>
+        /// Whether to scale rendering of the single-anchor placement for detected object instances
+        /// </summary>
+        [HideInInspector]
+        public bool ScaleSingleAnchorPlacement
+        {
+            get => _scaleSingleAnchorPlacement;
+            set { _scaleSingleAnchorPlacement = value; }
+        }
+
         private GameObject _environmentObservationVisuals;
         private void UpdateEnvironmentObservationVisuals()
         {

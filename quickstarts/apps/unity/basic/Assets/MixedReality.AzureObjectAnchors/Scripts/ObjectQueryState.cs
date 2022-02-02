@@ -31,7 +31,7 @@ public class ObjectQueryState : MonoBehaviour
     }
 
     // Update is called once per frame
-    async Task Update()
+    async void Update()
     {
         if (!_updateInProgress &&
             Query != null &&
