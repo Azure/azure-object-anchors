@@ -3,6 +3,7 @@
 
 using Azure;
 using Azure.Core.Diagnostics;
+using Azure.Core.Pipeline;
 using Azure.MixedReality.ObjectAnchors.Conversion;
 using Azure.Storage.Blobs;
 using Microsoft.Extensions.Logging;
@@ -10,6 +11,7 @@ using Newtonsoft.Json;
 using System;
 using System.Diagnostics.Tracing;
 using System.IO;
+using System.Net.Http;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -82,7 +84,13 @@ namespace ConversionQuickstart
                     Console.WriteLine("Attempting to upload asset...");
                     Uri assetUri = (await client.GetAssetUploadUriAsync()).Value.UploadUri;
                     Console.WriteLine($"\tUpload Uri: {assetUri}");
-                    BlobClient uploadBlobClient = new BlobClient(assetUri);
+                    BlobClient uploadBlobClient = new BlobClient(assetUri, new BlobClientOptions
+                    {
+                        // The default timeout for HttpClient and RetryOptions.NetworkTimeout is 100 seconds.
+                        // Increasing to 5 minutes allows for more flexibility when uploading assets
+                        Transport = new HttpClientTransport(new HttpClient { Timeout = TimeSpan.FromMinutes(5) }),
+                        Retry = { NetworkTimeout = TimeSpan.FromMinutes(5) }
+                    });
                     await UploadBlobAsync(uploadBlobClient, configuration.InputAssetPath);
                     Console.WriteLine("\nAsset uploaded");
 

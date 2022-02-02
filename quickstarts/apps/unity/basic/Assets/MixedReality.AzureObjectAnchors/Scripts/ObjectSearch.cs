@@ -57,6 +57,9 @@ public class ObjectSearch : MonoBehaviour
 
     [Tooltip("Material used to render the environment.")]
     public Material EnvironmentMaterial;
+    
+    [Tooltip("Prefab used to determine placement of detected objects.")]
+    public GameObject MultiAnchorPlacementPrefab;
 
     /// <summary>
     /// Flag to indicate the detection operation, 0 - in detection, 1 - detection completed.
@@ -74,9 +77,9 @@ public class ObjectSearch : MonoBehaviour
     private IObjectAnchorsService _objectAnchorsService;
 
     /// <summary>
-    /// Bounding box associated with each object instance with guid as instance id.
+    /// Placement of each object instance with guid as instance id.
     /// </summary>
-    private Dictionary<Guid, WireframeBoundingBox> _boundingBoxes = new Dictionary<Guid, WireframeBoundingBox>();
+    private Dictionary<Guid, MultiAnchorObjectPlacement> _objectPlacements = new Dictionary<Guid, MultiAnchorObjectPlacement>();
 
     /// <summary>
     /// Query associated with each model with guid as model id.
@@ -327,11 +330,10 @@ public class ObjectSearch : MonoBehaviour
                     {
                         TextLogger.LogRaw($"{EventArgsFormatter(_event.Args)} removed");
 
-                        var bbox = _boundingBoxes[_event.Args.InstanceId];
-                        _boundingBoxes.Remove(_event.Args.InstanceId);
+                        var placement = _objectPlacements[_event.Args.InstanceId];
+                        _objectPlacements.Remove(_event.Args.InstanceId);
 
-                        bbox.gameObject.SetActive(false);
-                        DestroyImmediate(bbox);
+                        Destroy(placement.gameObject);
 
                         break;
                     }
@@ -341,34 +343,29 @@ public class ObjectSearch : MonoBehaviour
 
     private void DrawBoundingBox(IObjectAnchorsServiceEventArgs instance)
     {
-        WireframeBoundingBox bbox;
-        if (!_boundingBoxes.TryGetValue(instance.InstanceId, out bbox))
+        MultiAnchorObjectPlacement placement;
+        if (!_objectPlacements.TryGetValue(instance.InstanceId, out placement))
         {
             var boundingBox = _objectAnchorsService.GetModelBoundingBox(instance.ModelId);
             Debug.Assert(boundingBox.HasValue);
 
-            bbox = new GameObject("Bounding Box").AddComponent<WireframeBoundingBox>();
-            bbox.transform.SetParent(transform, true);
-            bbox.gameObject.SetActive(false);
+            placement = Instantiate(MultiAnchorPlacementPrefab).GetComponent<MultiAnchorObjectPlacement>();
+
+            var bbox = placement.ModelSpaceContent.AddComponent<WireframeBoundingBox>();
             bbox.UpdateBounds(boundingBox.Value.Center, Vector3.Scale(boundingBox.Value.Extents, instance.ScaleChange), boundingBox.Value.Orientation, WireframeMaterial);
 
             var mesh = new GameObject("Model Mesh");
-            var material = mesh.AddComponent<MeshRenderer>().sharedMaterial = WireframeMaterial;
-            mesh.transform.SetParent(bbox.transform);
+            mesh.AddComponent<MeshRenderer>().sharedMaterial = WireframeMaterial;
+            mesh.transform.SetParent(placement.ModelSpaceContent.transform, false);
             MeshLoader.AddMesh(mesh, _objectAnchorsService, instance.ModelId);
 
-            _boundingBoxes.Add(instance.InstanceId, bbox);
-        }
-        else
-        {
-            bbox.gameObject.SetActive(false);
+            _objectPlacements.Add(instance.InstanceId, placement);
         }
 
-        var location = instance.Location;
-        if (location.HasValue)
+        if (instance.SurfaceCoverage > placement.SurfaceCoverage ||
+            !instance.Location.HasValue)
         {
-            bbox.transform.SetPositionAndRotation(location.Value.Position, location.Value.Orientation);
-            bbox.gameObject.SetActive(true);
+            placement.UpdatePlacement(instance);
         }
     }
 

@@ -11,6 +11,7 @@ using namespace DirectX;
 using namespace winrt;
 using namespace winrt::Windows::Foundation::Numerics;
 using namespace winrt::Windows::Perception::Spatial;
+using namespace winrt::Windows::Perception::Spatial::Preview;
 using namespace winrt::Windows::Storage;
 using namespace winrt::Microsoft::Azure::ObjectAnchors;
 using namespace winrt::Microsoft::Azure::ObjectAnchors::SpatialGraph;
@@ -78,7 +79,7 @@ namespace AoaSampleApp
         auto id = model.Id();
         m_models.emplace(id, model);
 
-        return id;
+        co_return id;
     }
 
     ObjectModel ObjectTracker::GetObjectModel(guid const& id) const
@@ -95,7 +96,7 @@ namespace AoaSampleApp
         }
     }
 
-    winrt::Windows::Foundation::IAsyncAction ObjectTracker::DetectAsync(ObjectSearchArea searchArea)
+    winrt::Windows::Foundation::IAsyncAction ObjectTracker::DetectAsync(SpatialGraphInteropFrameOfReferencePreview const& interopReferenceFrame, ObjectSearchArea const& searchArea)
     {
         co_await m_initOperation;
 
@@ -109,7 +110,7 @@ namespace AoaSampleApp
         //
 
         lock_guard lock(m_mutex);
-
+        m_interopReferenceFrame = interopReferenceFrame;
         m_searchArea = searchArea;
 
         //
@@ -192,12 +193,12 @@ namespace AoaSampleApp
 
         for(auto& [instance, metadata] : m_instances)
         {
-            auto centerToCoordinateSystem = metadata.CenterCoordinateSystem.TryGetTransformTo(coordinateSystem);
-            if (centerToCoordinateSystem)
+            auto coordinateSystemToPlacement = coordinateSystem.TryGetTransformTo(metadata.PlacementCoordinateSystem);
+            if (coordinateSystemToPlacement)
             {
-                TrackedObject obj(metadata.State);
+                TrackedObject obj(metadata.Placement);
                 obj.ModelId = instance.ModelId();
-                obj.CenterToCoordinateSystemTransform = centerToCoordinateSystem.Value();
+                obj.CoordinateSystemToPlacement = coordinateSystemToPlacement.Value();
                 objects.emplace_back(obj);
             }
         }
@@ -239,9 +240,9 @@ namespace AoaSampleApp
         winrt::check_bool(it != m_instances.cend());
 
         // Query tracking state, close an instance if it's lost in tracking.
-        auto state = instance.TryGetCurrentState();
+        auto placement = instance.TryGetCurrentPlacement({ m_interopReferenceFrame.NodeId(), m_interopReferenceFrame.CoordinateSystemToNodeTransform() });
 
-        if (state == nullptr)
+        if (placement == nullptr)
         {
             instance.Close();
 
@@ -249,7 +250,8 @@ namespace AoaSampleApp
         }
         else
         {
-            it->second.State = state.Value();
+            it->second.Placement = placement;
+            it->second.PlacementCoordinateSystem = m_interopReferenceFrame.CoordinateSystem();
         }
     }
 
@@ -272,10 +274,12 @@ namespace AoaSampleApp
             }
 
             // Create query for models not detected yet.
+            SpatialGraphInteropFrameOfReferencePreview interopReferenceFrame{ nullptr };
             vector<ObjectQuery> queries;
             {
                 lock_guard lock(m_mutex);
 
+                interopReferenceFrame = m_interopReferenceFrame;
                 if (m_searchArea != nullptr)
                 {
                     for (auto const& [modelId, model] : m_models)
@@ -324,9 +328,9 @@ namespace AoaSampleApp
                 decltype(m_instances) newInstances;
                 for (const auto& inst : detectedObjects)
                 {
-                    auto state = inst.TryGetCurrentState();
+                    auto placement = inst.TryGetCurrentPlacement({ interopReferenceFrame.NodeId(), interopReferenceFrame.CoordinateSystemToNodeTransform() });
 
-                    if (state != nullptr)
+                    if (placement != nullptr)
                     {
                         inst.Mode(m_trackingMode);
 
@@ -334,11 +338,10 @@ namespace AoaSampleApp
                             ObjectInstanceChangedHandler(
                                 bind(&ObjectTracker::OnInstanceStateChanged, this, placeholders::_1, placeholders::_2)));
 
-                        const auto& center = state.Value().Center;
                         newInstances.emplace(inst, ObjectInstanceMetadata{
                             inst.Changed(winrt::auto_revoke, bind(&ObjectTracker::OnInstanceStateChanged, this, placeholders::_1, placeholders::_2)),
-                            state.Value(),
-                            Preview::SpatialGraphInteropPreview::CreateCoordinateSystemForNode(center.NodeId, center.Position, center.Orientation)
+                            placement,
+                            interopReferenceFrame.CoordinateSystem()
                         });
                     }
                     else

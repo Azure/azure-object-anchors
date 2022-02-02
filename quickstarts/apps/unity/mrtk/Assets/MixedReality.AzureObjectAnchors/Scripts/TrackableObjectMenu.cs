@@ -55,6 +55,15 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
         [Tooltip("The show environment observations toggle")]
         public Interactable ShowEnvironmentObservationsToggle = null;
 
+        [Tooltip("The multi-anchor placement toggle")]
+        public Interactable MultiAnchorPlacementToggle = null;
+
+        [Tooltip("The single-anchor placement toggle")]
+        public Interactable SingleAnchorPlacementToggle = null;
+
+        [Tooltip("The scale single-anchor placement toggle")]
+        public Interactable ScaleSingleAnchorPlacementToggle = null;
+
         [Tooltip("The coverage slider label")]
         public TextMesh CoverageRatioSliderLabel = null;
 
@@ -214,6 +223,24 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
         {
             _objectTracker.ShowEnvironmentObservations = ShowEnvironmentObservationsToggle.IsToggled;
             Debug.Log($"Toggle Show Environment Observations {_objectTracker.ShowEnvironmentObservations}");
+        }
+
+        public void ToggleMultiAnchorPlacement()
+        {
+            _objectTracker.MultiAnchorPlacement = MultiAnchorPlacementToggle.IsToggled;
+            Debug.Log($"Toggle Multi-Anchor Placement {_objectTracker.MultiAnchorPlacement}");
+        }
+
+        public void ToggleSingleAnchorPlacement()
+        {
+            _objectTracker.SingleAnchorPlacement = SingleAnchorPlacementToggle.IsToggled;
+            Debug.Log($"Toggle Single-Anchor Placement {_objectTracker.MultiAnchorPlacement}");
+        }
+
+        public void ToggleScaleSingleAnchorPlacement()
+        {
+            _objectTracker.ScaleSingleAnchorPlacement = ScaleSingleAnchorPlacementToggle.IsToggled;
+            Debug.Log($"Toggle Scale Single-Anchor Placement {_objectTracker.ScaleSingleAnchorPlacement}");
         }
     }
 }
