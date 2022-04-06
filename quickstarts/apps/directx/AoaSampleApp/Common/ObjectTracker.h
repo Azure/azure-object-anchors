@@ -7,6 +7,7 @@
 
 #include <winrt/Microsoft.Azure.ObjectAnchors.h>
 #include <winrt/Microsoft.Azure.ObjectAnchors.Diagnostics.h>
+#include <winrt/Microsoft.Azure.ObjectAnchors.SpatialGraph.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Perception.Spatial.h>
 
@@ -18,9 +19,9 @@
 
 namespace AoaSampleApp
 {
-    struct TrackedObject : winrt::Microsoft::Azure::ObjectAnchors::ObjectInstancePlacement
+    struct TrackedObject : winrt::Microsoft::Azure::ObjectAnchors::ObjectInstanceState, winrt::Microsoft::Azure::ObjectAnchors::SpatialGraph::SpatialGraphPlacement
     {
-        TrackedObject(ObjectInstancePlacement const& placement) : ObjectInstancePlacement(placement) {}
+        TrackedObject(ObjectInstanceState const& state, SpatialGraphPlacement const& placement) : ObjectInstanceState(state), SpatialGraphPlacement(placement) {}
 
         winrt::guid ModelId;
         winrt::Windows::Foundation::Numerics::float4x4 CoordinateSystemToPlacement;
@@ -74,7 +75,8 @@ namespace AoaSampleApp
         struct ObjectInstanceMetadata
         {
             winrt::Microsoft::Azure::ObjectAnchors::ObjectInstance::Changed_revoker ChangedSubscription;
-            winrt::Microsoft::Azure::ObjectAnchors::ObjectInstancePlacement Placement;
+            winrt::Microsoft::Azure::ObjectAnchors::ObjectInstanceState State;
+            winrt::Microsoft::Azure::ObjectAnchors::SpatialGraph::SpatialGraphPlacement Placement;
             winrt::Windows::Perception::Spatial::SpatialCoordinateSystem PlacementCoordinateSystem;
         };
 

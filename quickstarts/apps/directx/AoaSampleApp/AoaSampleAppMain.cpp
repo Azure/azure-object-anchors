@@ -686,7 +686,7 @@ HolographicFrame AoaSampleAppMain::Update(HolographicFrame const& previousFrame)
             }
             else
             {
-                const SpatialPose modelPose = it->ComputeModelPoseForView({ viewLocation.Position(), viewLocation.Orientation() }, it->CoordinateSystemToPlacement);
+                const SpatialPose modelPose = it->ComputeOriginForView({ viewLocation.Position(), viewLocation.Orientation() }, it->CoordinateSystemToPlacement);
 
                 renderer.second.SetTransform(make_float4x4_from_quaternion(modelPose.Orientation) * make_float4x4_translation(modelPose.Position));
                 renderer.second.SetActive(true);
