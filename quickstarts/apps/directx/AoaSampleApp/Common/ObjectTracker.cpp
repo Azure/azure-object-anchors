@@ -196,7 +196,7 @@ namespace AoaSampleApp
             auto coordinateSystemToPlacement = coordinateSystem.TryGetTransformTo(metadata.PlacementCoordinateSystem);
             if (coordinateSystemToPlacement)
             {
-                TrackedObject obj(metadata.Placement);
+                TrackedObject obj(metadata.State, metadata.Placement);
                 obj.ModelId = instance.ModelId();
                 obj.CoordinateSystemToPlacement = coordinateSystemToPlacement.Value();
                 objects.emplace_back(obj);
@@ -236,22 +236,19 @@ namespace AoaSampleApp
         lock_guard lock(m_mutex);
 
         auto instance = sender.as<ObjectInstance>();
-        auto it = m_instances.find(instance);
-        winrt::check_bool(it != m_instances.cend());
+        auto& metadata = m_instances.at(instance);
 
         // Query tracking state, close an instance if it's lost in tracking.
-        auto placement = instance.TryGetCurrentPlacement({ m_interopReferenceFrame.NodeId(), m_interopReferenceFrame.CoordinateSystemToNodeTransform() });
-
-        if (placement == nullptr)
+        metadata.State = instance.TryGetCurrentState();
+        metadata.Placement = metadata.State ? metadata.State.TryCreatePlacement({ m_interopReferenceFrame.NodeId(), m_interopReferenceFrame.CoordinateSystemToNodeTransform() }) : nullptr;
+        if (metadata.State && metadata.Placement)
         {
-            instance.Close();
-
-            m_instances.erase(it);
+            metadata.PlacementCoordinateSystem = m_interopReferenceFrame.CoordinateSystem();
         }
         else
         {
-            it->second.Placement = placement;
-            it->second.PlacementCoordinateSystem = m_interopReferenceFrame.CoordinateSystem();
+            instance.Close();
+            m_instances.erase(instance);
         }
     }
 
@@ -328,9 +325,9 @@ namespace AoaSampleApp
                 decltype(m_instances) newInstances;
                 for (const auto& inst : detectedObjects)
                 {
-                    auto placement = inst.TryGetCurrentPlacement({ interopReferenceFrame.NodeId(), interopReferenceFrame.CoordinateSystemToNodeTransform() });
-
-                    if (placement != nullptr)
+                    auto state = inst.TryGetCurrentState();
+                    auto placement = state ? state.TryCreatePlacement({ interopReferenceFrame.NodeId(), interopReferenceFrame.CoordinateSystemToNodeTransform() }) : nullptr;
+                    if (state && placement)
                     {
                         inst.Mode(m_trackingMode);
 
@@ -340,6 +337,7 @@ namespace AoaSampleApp
 
                         newInstances.emplace(inst, ObjectInstanceMetadata{
                             inst.Changed(winrt::auto_revoke, bind(&ObjectTracker::OnInstanceStateChanged, this, placeholders::_1, placeholders::_2)),
+                            state,
                             placement,
                             interopReferenceFrame.CoordinateSystem()
                         });
