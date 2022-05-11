@@ -15,10 +15,8 @@ public class MeshLoader : MonoBehaviour
     {
         Debug.Log($"Loading model from: '{ModelPath}'");
         byte[] modelBytes = File.ReadAllBytes(ModelPath);
-
-        ObjectAnchorsSession session = new ObjectAnchorsSession(ObjectAnchorsConfig.GetConfig().AccountInformation);
-        using (ObjectObserver observer = session.CreateObjectObserver())
-        using (ObjectModel model = await observer.LoadObjectModelAsync(modelBytes))
+        
+        using (ObjectModel model = await ObjectModel.LoadAsync((modelBytes)))
         {
             Numerics.Vector3[] modelVertices = new Numerics.Vector3[model.VertexCount];
             model.GetVertexPositions(modelVertices);

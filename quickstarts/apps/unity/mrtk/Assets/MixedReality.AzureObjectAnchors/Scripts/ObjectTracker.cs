@@ -365,6 +365,8 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
                 global::Windows.Foundation.IAsyncOperation<global::Windows.UI.Popups.IUICommand> dialog = null;
                 UnityEngine.WSA.Application.InvokeOnUIThread(() => dialog = new global::Windows.UI.Popups.MessageDialog(message, "Invalid account information").ShowAsync(), true);
                 await dialog;
+#elif UNITY_EDITOR
+                UnityEditor.EditorUtility.DisplayDialog("Invaild account information", ex.Message, "OK");
 #endif // WINDOWS_UWP
                 throw ex;
             }

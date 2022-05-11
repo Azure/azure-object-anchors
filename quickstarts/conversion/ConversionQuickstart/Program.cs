@@ -11,8 +11,8 @@ using Newtonsoft.Json;
 using System;
 using System.Diagnostics.Tracing;
 using System.IO;
+using System.IO.Compression;
 using System.Net.Http;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -26,7 +26,7 @@ namespace ConversionQuickstart
 
         public static async Task<int> Main(string[] args)
         {
-            string optionalConfigPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), OptionalConfigFileName);
+            string optionalConfigPath = Path.Combine(System.AppContext.BaseDirectory, OptionalConfigFileName);
             Configuration configuration = File.Exists(optionalConfigPath)
                 ? JsonConvert.DeserializeObject<Configuration>(File.ReadAllText(optionalConfigPath))
                 : new Configuration();
@@ -53,7 +53,7 @@ namespace ConversionQuickstart
             }
 
             Program program = new Program(configuration);
-            return await program.RunJob(jobId);
+            return (await program.RunJob(jobId)).result;
         }
 
         public Program(Configuration configuration)
@@ -61,7 +61,7 @@ namespace ConversionQuickstart
             this.configuration = configuration;
         }
 
-        public async Task<int> RunJob(string jobId = "")
+        public async Task<(int result, string jobId)> RunJob(string jobId = "")
         {
             int returnValue = 0;
             try
@@ -118,15 +118,27 @@ namespace ConversionQuickstart
                 // Wait for job to complete
                 Console.WriteLine("Waiting for job completion...");
                 Response<AssetConversionProperties> response = await conversionOperation.WaitForCompletionAsync(new CancellationTokenSource((int)configuration.WaitForJobCompletionTimeout.TotalMilliseconds).Token);
+                Console.WriteLine(
+                    $"\nAsset dimensions calculated during conversion (in meters): " +
+                    $"({(response.Value.ScaledAssetDimensions?.X.ToString() ?? "NULL")}," +
+                    $" {(response.Value.ScaledAssetDimensions?.Y.ToString() ?? "NULL")}," +
+                    $" {(response.Value.ScaledAssetDimensions?.Z.ToString() ?? "NULL")})");
+
                 returnValue = EvaluateJobResults(response.Value);
 
                 if (response.Value.ConversionStatus == AssetConversionStatus.Succeeded)
                 {
-                    string outputPath = Path.Combine(Path.GetDirectoryName(configuration.InputAssetPath), Path.GetFileNameWithoutExtension(configuration.InputAssetPath) + "_" + jobId + ".ou");
-                    Console.WriteLine($"Attempting to download result as '{outputPath}'...");
+                    string tempFolderPath = Path.GetTempPath();
+                    string outputFolderPath = Path.GetDirectoryName(configuration.InputAssetPath);
+                    string zipFilePath = Path.Combine(tempFolderPath, Path.GetFileNameWithoutExtension(configuration.InputAssetPath) + "_" + jobId + ".zip");
+                    Console.WriteLine($"Attempting to download zip result here: '{zipFilePath}' ...");
                     BlobClient downloadBlobClient = new BlobClient(response.Value.OutputModelUri);
-                    await downloadBlobClient.DownloadToAsync(outputPath);
-                    Console.WriteLine("Success!");
+                    await downloadBlobClient.DownloadToAsync(zipFilePath);
+
+                    Console.WriteLine($"Unzipping '{zipFilePath}' to '{outputFolderPath}' ...");
+                    ZipFile.ExtractToDirectory(zipFilePath, outputFolderPath, overwriteFiles: true);
+                    Console.WriteLine($"Success! Your OU Model is here: '{outputFolderPath}\\{jobId.ToUpperInvariant()}.ou'");
+                    File.Delete(zipFilePath);
                 }
                 else
                 {
@@ -204,7 +216,7 @@ namespace ConversionQuickstart
                 PrintException(e);
             }
 
-            return returnValue;
+            return (result: returnValue, jobId: jobId);
         }
 
         private static async Task UploadBlobAsync(BlobClient blobClient, string fileToUploadPath)
