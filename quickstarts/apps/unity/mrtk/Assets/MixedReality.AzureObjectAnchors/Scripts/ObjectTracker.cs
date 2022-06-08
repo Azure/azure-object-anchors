@@ -4,7 +4,6 @@
 #define SPATIALCOORDINATESYSTEM_API_PRESENT
 #endif
 
-#if UNITY_WSA
 using Microsoft.MixedReality.Toolkit;
 using System;
 using System.Collections.Concurrent;
@@ -366,7 +365,7 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
                 UnityEngine.WSA.Application.InvokeOnUIThread(() => dialog = new global::Windows.UI.Popups.MessageDialog(message, "Invalid account information").ShowAsync(), true);
                 await dialog;
 #elif UNITY_EDITOR
-                UnityEditor.EditorUtility.DisplayDialog("Invaild account information", ex.Message, "OK");
+                UnityEditor.EditorUtility.DisplayDialog("Invalid account information", ex.Message, "OK");
 #endif // WINDOWS_UWP
                 throw ex;
             }
@@ -379,7 +378,7 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
             foundModelsInAppPath = await _trackableObjectDataLoader.LoadObjectModelsAsync(Application.persistentDataPath);
             // Read models from 3D Objects folder
 #if WINDOWS_UWP
-            foundModelsInObjects3D = await _trackableObjectDataLoader.LoadObjectModelsAsync(global::Windows.Storage.KnownFolders.Objects3D.Path);
+            foundModelsInObjects3D = await _trackableObjectDataLoader.LoadObjectModelsFromWellKnownFolderAsync(global::Windows.Storage.KnownFolders.Objects3D.Path);
 #endif
 
             _environmentObservationVisuals = new GameObject("Environment Observation Visuals");
@@ -668,4 +667,3 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
         public IEnumerable<TrackedObject> TrackedObjects => _instanceToTrackedObject.Values;
     }
 }
-#endif // UNITY_WSA

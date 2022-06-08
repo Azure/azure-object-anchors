@@ -723,6 +723,7 @@ PlayerSettings:
   assemblyVersionValidation: 1
   gcWBarrierValidation: 0
   apiCompatibilityLevelPerPlatform:
+    Standalone: 3
     Windows Store Apps: 3
   m_RenderingPath: 1
   m_MobileRenderingPath: 1

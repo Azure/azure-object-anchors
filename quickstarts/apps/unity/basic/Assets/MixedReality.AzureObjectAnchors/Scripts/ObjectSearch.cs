@@ -4,7 +4,6 @@
 #define SPATIALCOORDINATESYSTEM_API_PRESENT
 #endif
 
-#if UNITY_WSA
 using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
@@ -19,6 +18,7 @@ using Microsoft.Azure.ObjectAnchors.Unity;
 #if WINDOWS_UWP
 using Windows.Storage;
 using Windows.Storage.Streams;
+using Windows.Storage.Search;
 #endif
 
 public class ObjectSearch : MonoBehaviour
@@ -186,15 +186,44 @@ public class ObjectSearch : MonoBehaviour
             await _objectAnchorsService.AddObjectModelAsync(file.Replace('/', '\\'));
         }
 
+
 #if WINDOWS_UWP
+
+        // Accessing a known but protected folder only works when using the StorageFolder/StorageFile apis
+        // and not the System.IO apis. On some devices, the static StorageFolder for well known folders
+        // like the 3d objects folder returns access denied when queried, but behaves as expected when
+        // accessed by path. Frustratingly, on some devices the opposite is true, and the static StorageFolder 
+        // works and the workaround finds no files.
         StorageFolder objects3d = KnownFolders.Objects3D;
-        foreach (string filePath in FileHelper.GetFilesInDirectory(objects3d.Path, "*.ou"))
+
+        // First try using the static folder directly, which will throw an exception on some devices
+        try
         {
-            TextLogger.Log($"Loading model ({Path.GetFileNameWithoutExtension(filePath)})");
-
-            byte[] buffer =  await ReadFileBytesAsync(filePath);
-
-            await _objectAnchorsService.AddObjectModelAsync(buffer);
+            foreach (string filePath in FileHelper.GetFilesInDirectory(objects3d.Path, "*.ou"))
+            {
+                TextLogger.Log($"Loading model ({Path.GetFileNameWithoutExtension(filePath)})");
+                byte[] buffer =  await ReadFileBytesAsync(filePath);
+                await _objectAnchorsService.AddObjectModelAsync(buffer);
+            }
+        }
+        catch(UnauthorizedAccessException ex)
+        {
+            Debug.Log("access denied to objects 3d folder. Trying through path");
+            StorageFolder objects3dAcc = await StorageFolder.GetFolderFromPathAsync(objects3d.Path);
+            foreach(StorageFile file in await objects3dAcc.GetFilesAsync(CommonFileQuery.OrderByName))
+            {
+                if (Path.GetExtension(file.Name) == ".ou")
+                {
+                    TextLogger.Log($"Loading model ({file.Path} {file.Name}");
+                    byte[] buffer =  await ReadFileBytesAsync(file);
+                    await _objectAnchorsService.AddObjectModelAsync(buffer);
+                }
+            }
+        }
+        catch(Exception ex)
+        {
+            Debug.LogWarning("unexpected exception accessing objects 3d folder");
+            Debug.LogException(ex);
         }
 #endif
 
@@ -580,8 +609,13 @@ public class ObjectSearch : MonoBehaviour
         if (file == null)
         {
             return null; 
-        }           
+        }
 
+        return await ReadFileBytesAsync(file);
+    }    
+
+    private async Task<byte[]> ReadFileBytesAsync(StorageFile file)
+    {
         using (IRandomAccessStream stream = await file.OpenReadAsync())
         {
             using (var reader = new DataReader(stream.GetInputStreamAt(0)))
@@ -592,8 +626,7 @@ public class ObjectSearch : MonoBehaviour
                 return bytes;
             }
         }
-    }    
+    }
 #endif
 
 }
-#endif

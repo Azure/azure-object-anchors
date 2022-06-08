@@ -23,7 +23,6 @@ public static class MeshLoader
 
         public static SystemMeshData FromObjectModel(Guid modelId)
         {
-#if UNITY_WSA
             var objectAnchorsService = ObjectAnchorsService.GetService();
             return new SystemMeshData()
             {
@@ -31,9 +30,6 @@ public static class MeshLoader
                 Normals = objectAnchorsService.GetModelVertexNormals(modelId),
                 Indices = objectAnchorsService.GetModelTriangleIndices(modelId)
             };
-#else
-            return new SystemMeshData();
-#endif
         }
 
         public static SystemMeshData FromEnvironmentObseration(EnvironmentObservation observation)
@@ -44,11 +40,9 @@ public static class MeshLoader
                 Normals = new Numerics.Vector3[observation.VertexCount],
                 Indices = new uint[observation.TriangleIndexCount]
             };
-#if UNITY_WSA
             observation.GetVertexPositions(meshData.Vertices);
             observation.GetVertexNormals(meshData.Normals);
             observation.GetTriangleIndices(meshData.Indices);
-#endif
             return meshData;
         }
     }
