@@ -1,6 +1,5 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
-#if UNITY_WSA
 using UnityEngine;
 
 using Microsoft.Azure.ObjectAnchors.Unity;
@@ -35,5 +34,3 @@ public class AppPaused : MonoBehaviour
         }
     }
 }
-#endif
-

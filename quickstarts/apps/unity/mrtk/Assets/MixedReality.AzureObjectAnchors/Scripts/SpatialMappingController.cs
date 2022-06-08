@@ -1,6 +1,5 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
-#if UNITY_WSA
 using Microsoft.MixedReality.Toolkit;
 using Microsoft.MixedReality.Toolkit.SpatialAwareness;
 using System.Collections.Generic;
@@ -155,4 +154,3 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
         }
     }
 }
-#endif // UNITY_WSA

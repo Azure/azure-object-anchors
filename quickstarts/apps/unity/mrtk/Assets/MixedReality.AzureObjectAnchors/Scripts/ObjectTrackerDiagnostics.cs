@@ -1,6 +1,5 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
-#if UNITY_WSA
 using Microsoft.Azure.ObjectAnchors.Unity;
 using System.Collections.Generic;
 using System.IO;
@@ -101,4 +100,3 @@ namespace Microsoft.Azure.ObjectAnchors.Unity.Sample
         }
     }
 }
-#endif // UNITY_WSA

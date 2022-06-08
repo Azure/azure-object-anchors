@@ -1,12 +1,5 @@
 {
   "scopedRegistries": [{
-      "name": "MS Build for Unity",
-      "url": "https://pkgs.dev.azure.com/UnityDeveloperTools/MSBuildForUnity/_packaging/UnityDeveloperTools/npm/registry",
-      "scopes": [
-        "com.microsoft"
-      ]
-    },
-    {
       "name": "Microsoft Mixed Reality",
       "url": "https://pkgs.dev.azure.com/aipmr/MixedReality-Unity-Packages/_packaging/Unity-packages/npm/registry/",
       "scopes": [
@@ -16,9 +9,9 @@
     }
   ],
   "dependencies": {
-    "com.microsoft.mixedreality.toolkit.foundation": "2.7.0",
-    "com.microsoft.mixedreality.toolkit.tools": "2.7.0",
-    "com.microsoft.msbuildforunity": "0.9.1-20200131.14",
+    "com.microsoft.mixedreality.toolkit.foundation": "2.7.3",
+    "com.microsoft.mixedreality.toolkit.tools": "2.7.3",
+    "com.microsoft.mixedreality.toolkit.standardassets": "2.7.3",
     "com.unity.collab-proxy": "1.2.16",
     "com.unity.ext.nunit": "1.0.6",
     "com.unity.ide.rider": "1.1.4",
