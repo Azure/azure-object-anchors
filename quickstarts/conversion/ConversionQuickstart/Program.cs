@@ -7,12 +7,13 @@ using Azure.Core.Pipeline;
 using Azure.MixedReality.ObjectAnchors.Conversion;
 using Azure.Storage.Blobs;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using System;
 using System.Diagnostics.Tracing;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -26,10 +27,7 @@ namespace ConversionQuickstart
 
         public static async Task<int> Main(string[] args)
         {
-            string optionalConfigPath = Path.Combine(System.AppContext.BaseDirectory, OptionalConfigFileName);
-            Configuration configuration = File.Exists(optionalConfigPath)
-                ? JsonConvert.DeserializeObject<Configuration>(File.ReadAllText(optionalConfigPath))
-                : new Configuration();
+            Configuration configuration = LoadConfiguration();
 
             string jobId = string.Empty;
             if (args.Length >= 1)
@@ -59,6 +57,32 @@ namespace ConversionQuickstart
         public Program(Configuration configuration)
         {
             this.configuration = configuration;
+        }
+
+        public static Configuration LoadConfiguration()
+        {
+            string optionalConfigPath = Path.Combine(AppContext.BaseDirectory, OptionalConfigFileName);
+
+            return LoadConfiguration(optionalConfigPath);
+        }
+
+        public static Configuration LoadConfiguration(string optionalConfigPath)
+        {
+            if (File.Exists(optionalConfigPath))
+            {
+                JsonSerializerOptions serializerOptions = new()
+                {
+                    IncludeFields = true,
+                    Converters =
+                    {
+                        new JsonStringEnumConverter(allowIntegerValues: true),
+                    }
+                };
+
+                return JsonSerializer.Deserialize<Configuration>(File.ReadAllText(optionalConfigPath), serializerOptions);
+            }
+
+            return new Configuration();
         }
 
         public async Task<(int result, string jobId)> RunJob(string jobId = "")

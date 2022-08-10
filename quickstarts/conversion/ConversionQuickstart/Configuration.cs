@@ -3,11 +3,10 @@
 
 using System;
 using System.Numerics;
+using System.Text.Json.Serialization;
 using Azure.MixedReality.ObjectAnchors.Conversion;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
 
 namespace ConversionQuickstart
 {
@@ -32,7 +31,6 @@ namespace ConversionQuickstart
         public Vector3 Gravity = new Vector3(0.0f, -1.0f, 0.0f);
 
         // The unit of measurement of the 3D model
-        [JsonConverter(typeof(StringEnumConverter))]
         public AssetLengthUnit AssetDimensionUnit = AssetLengthUnit.Meters;
 
         [JsonIgnore]
